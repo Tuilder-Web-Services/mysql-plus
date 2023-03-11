@@ -1,0 +1,48 @@
+{
+  "name": "@tuilder/mysql-plus",
+  "version": "0.0.2",
+  "description": "Automatically manages your MYSQL db schema, based on native javascript objects",
+  "typings": "./lib/index.d.ts",
+  "module": "./lib/index.mjs",
+  "es2022": "./lib/index.mjs",
+  "exports": {
+    "./package.json": {
+      "default": "./package.json"
+    },
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.mjs",
+      "node": "./lib/index.mjs",
+      "import": "./lib/index.mjs",
+      "require": "./lib/index.js",
+      "es2022": "./lib/index.mjs"
+    }
+  },
+  "files": [
+    "lib/**/*"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "watch": "npm run build -- --watch src",
+    "prepack": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EmanH/mysql-schema-manager.git"
+  },
+  "author": "Emmanuel Higgins",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/EmanH/mysql-schema-manager/issues"
+  },
+  "homepage": "https://github.com/EmanH/mysql-schema-manager#readme",
+  "devDependencies": {
+    "ts-loader": "^9.4.2",
+    "typescript": "^4.9.5",
+    "tsup": "^6.6.3"
+  },
+  "dependencies": {
+    "mysql2": "^3.2.0",
+    "nanoid": "^4.0.1"
+  }
+}
