@@ -42,6 +42,7 @@ export class MySQLPlus {
 
     const auditTrailEnabled = options.auditTrailEnabled ?? true
     const auditTrailSkipTables = new Set(options.auditTrailSkipTables ?? [])
+    auditTrailSkipTables.add('auditTrail')
 
     if (auditTrailEnabled) {
       const permissions = {
@@ -132,6 +133,7 @@ export class MySQLPlus {
     }
     if (!data.id) {
       data.id = nanoid()
+      // data.id = Math.random().toString(36).substr(2, 9)
     }
     Object.keys(data).forEach(k => {
       if (['created_at', 'last_modified_at'].includes(k.toLowerCase())) {

@@ -29,12 +29,11 @@ db.eventStream.subscribe(e => {
 
   const permissions: IDbPermissions = {
     global: new Set([EDbOperations.Read, EDbOperations.Write, EDbOperations.Delete]),
-    tables: {
-      camp_people: {
-        operations: new Set([EDbOperations.Read]),
-        protectedFields: new Set(['age'])
-      }
-    },
+    // tables: {
+    //   camp_people: { operations: new Set([EDbOperations.Read]) },
+    //   sales: { operations: new Set([EDbOperations.Read]) },
+    //   emails: { operations: new Set([EDbOperations.Read]) }
+    // },
     qualifiers: {
       _account: accountId
     }
@@ -54,5 +53,5 @@ db.eventStream.subscribe(e => {
   await db.write(permissions, 'FooPerson', { id: 'abfui1y2fsbkj', age: 30 })
 
   // Delete some data
-  await db.delete(permissions, 'FooPerson', 'abfui1y2fsbkj')
+  // await db.delete(permissions, 'FooPerson', 'abfui1y2fsbkj')
 })()
