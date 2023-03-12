@@ -1,44 +1,50 @@
-import { DBConnection } from "./connect"
-import { SchemaChain, TSchemaChain } from "./utils"
+import { Connection } from "mysql2/promise"
+import { SchemaSync } from "./sync"
+import { toCamel, toSnake } from "./utils"
 
 export interface IReadParams {
   id?: string,
   columns?: string | string[],
-  values?: (string | number) | (string | number)[],
+  where?: Record<string, any>,
   return?: string,
   firstOnly?: boolean,
   skipAppendAccount?: boolean,
 }
 
-export async function DBRead<T>(schema: TSchemaChain, params: IReadParams = {}): Promise<null | T> {
+export async function dbRead<T>(db: Connection, database: string, tableName: string, params: IReadParams = {}, syncService: SchemaSync): Promise<null | T> {
 
-  const columnsType = typeof params.columns
-  const columns: string[] = []
+  tableName = toSnake(tableName)
+  const tableDef = await syncService.getTableDefinition(tableName)
+  const columns: string[] = (params.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
+  const whereValues: any[]     = []
+  const whereColumns: string[] = []
 
-  if (columnsType === 'string') columns.push(params.columns as string)
-  else if (Array.isArray(params.columns)) columns.push(...params.columns as string[])
-
-  const valuesType = typeof params.values
-  const values: any[] = []
-  if (valuesType === 'string') values.push(params.values as string)
-  else if (Array.isArray(params.values)) values.push(...params.values as any[])
+  if (params.where && Object.keys(params.where).length > 0) {
+    for (const key of Object.keys(params.where)) {
+      whereColumns.push(toSnake(key))
+      whereValues.push(params.where[key])
+    }
+  }
 
   if (params.id) {
     columns.push('id')
-    values.push(params.id)
+    whereValues.push(params.id)
+    whereColumns.push('id')
   }
 
-  const Mysql = await DBConnection()
   try {
 
-    let SelectCols = '*'
-    if (params.return) SelectCols = '`' + params.return.trim().split(',').map(s => s.trim()).join('`, `') + '`'
+    let selectCols = columns.length ? '`' + columns.map(c => {
+      const snake = toSnake(c)
+      const camel = toCamel(c)
+      return snake === camel ? snake : snake + '` as `' + camel
+    }).join('`, `') + '`' : '*'
 
-    const WhereCols = columns.length ? ' where ' + columns.map(c => '`' + c + '`=?').join(' and ') : ''
+    const whereCols = whereColumns.length > 0 ? ' where ' + whereColumns.map(c => '`' + c + '`=?').join(' and ') : ''
 
-    const Query = `select ${SelectCols} from ${SchemaChain(schema)} ${WhereCols}`
+    const query = `select ${selectCols} from \`${database}\`.\`${tableName}\` ${whereCols}`
 
-    const [rows] = await Mysql.query(Query, values) as any[]
+    const [rows] = await db.query(query, whereValues) as any[]
 
     if (rows.length) {
       if (params.firstOnly) {
@@ -54,10 +60,4 @@ export async function DBRead<T>(schema: TSchemaChain, params: IReadParams = {}):
   }
 
   return null
-}
-
-export async function DBReadFirst<T>(table: string, params?: IReadParams): Promise<null | T> {
-  params = (params || {})
-  params.firstOnly = true
-  return DBRead(table, params)
 }

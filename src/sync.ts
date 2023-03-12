@@ -1,59 +1,31 @@
 import { Connection } from 'mysql2/promise'
-import { DBConnection, GetOptions } from './connect'
-
-import { SchemaChain, SchemaChainFriendly, SchemaDBName, SchemaTableName, TSchemaChain } from './utils'
+import { toSnake } from './utils'
 
 export class SchemaSync {
 
-  public static get Instance() { return this._instance ?? (this._instance = new this()) }
+  private tableDefinitions = new Map<string, ITableDefinition>()
 
-  private static _instance: SchemaSync
-  private _Connection!: Connection
-  private _TableDefinitions: ITableDefinition[] = []
-  private _Schemas: string[] = []
+  constructor(private connection: Connection, private dbName: string, private schemaKeys?: Record<string, IKey[]>) {}
 
-  private get _dbName () { return GetOptions().database }
-  private get _schemaKeys () { return GetOptions().schemaKeys }
-
-  constructor() {
-    if (this._dbName) this._Schemas.push(this._dbName)
-    this._Init()
-  }
-
-  public get DefaultSchema(): string {
-    return this._Schemas[0]
-  }
-
-  private async _Init(): Promise<void> {
-    if (!this._Connection) this._Connection = await DBConnection()
-  }
-
-  public async _CheckSchema(Schema: TSchemaChain) {
-    const Dbname = SchemaDBName(Schema)
-    if (!Dbname) return
-    if (!this._Schemas.includes(Dbname.toLowerCase())) {
-      const Mysql = await DBConnection()
-      const [rows] = await Mysql.query(`select count(*) as \`Exists\` from information_schema.schemata WHERE schema_name = ?`, Dbname) as any[]
-      const Exists = rows[0].Exists
-      if (!Exists) {
-        const Query = `create database \`${Dbname}\` character set 'utf8mb4' collate 'utf8mb4_0900_ai_ci'`
-        try {
-          await Mysql.query(Query)
-        } catch (e) {
-          console.error(e)
-          console.error(Query)
-        }
+  public async checkSchema() {
+    const { dbName } = this
+    const [rows] = await this.connection.query(`select count(*) as \`Exists\` from information_schema.schemata WHERE schema_name = ?`, dbName) as any[]
+    const exists = rows[0].Exists
+    if (!exists) {
+      try {
+        await this.connection.query(`create database \`${dbName}\` character set 'utf8mb4' collate 'utf8mb4_general_ci'`)
+      } catch (e) {
+        console.error(e)
       }
-      this._Schemas.push(Dbname)
+      await this.connection.query(`use \`${dbName}\``)
     }
   }
 
-  private async _GetTableDefinition(Schema: TSchemaChain): Promise<ITableDefinition | null> {
+  public async getTableDefinition(name: string): Promise<ITableDefinition | null> {
     try {
-      await this._CheckSchema(Schema)
-      let TableDef = this._TableDefinitions.find(t => t.FullSchemaPath.toLowerCase() === SchemaChainFriendly(Schema).toLowerCase())
-      if (!TableDef) {
-        const [rows] = await this._Connection.query(`show create table ${SchemaChain(Schema)}`) as any[]
+      let tableDef = this.tableDefinitions.get(name)
+      if (!tableDef) {
+        const [rows] = await this.connection.query(`show create table \`${this.dbName}\`.\`${name}\``) as any[]
         const txt = (rows[0]['Create Table'] as string)
         let lines = txt.split('\n')
         lines.shift()
@@ -61,56 +33,55 @@ export class SchemaSync {
         lines = lines.map(l => l.replace(/\`/g, '')
           .replace(/^\s+/g, '')
           .replace(/varchar\(([0-9]+)\) CHARACTER SET utf8/, 'varchar($1) '))
-        const output: IFieldDefinition[] = lines.map(l => {
+        const fields: IFieldDefinition[] = lines.map(l => {
           let bits = l.split(' ')
           let dataLengthMatch = bits[1].match(/\(([0-9]+)\,?([0-9]+)?\)/)
           const output = {
-            Field: bits[0],
-            DataType: bits[1].split('(')[0],
-            DataLength1: dataLengthMatch ? parseInt(dataLengthMatch[1], 10) || null : null,
-            DataLength2: dataLengthMatch ? parseInt(dataLengthMatch[2], 10) || null : null,
-            FullDefinition: ''
+            field: bits[0],
+            dataType: bits[1].split('(')[0],
+            dataLength1: dataLengthMatch ? parseInt(dataLengthMatch[1], 10) || null : null,
+            dataLength2: dataLengthMatch ? parseInt(dataLengthMatch[2], 10) || null : null,
+            fullDefinition: ''
           }
-          if (output.DataType.toLowerCase() === 'tinyint') {
-            output.DataLength1 = null
-            output.DataType = 'boolean'
+          if (output.dataType.toLowerCase() === 'tinyint') {
+            output.dataLength1 = null
+            output.dataType = 'boolean'
           }
           return output
         })
-        TableDef = { Name: SchemaTableName(Schema), FullSchemaPath: SchemaChainFriendly(Schema), Fields: output }
-        this._TableDefinitions.push(TableDef)
+        tableDef = { name, fields }
+        this.tableDefinitions.set(name, tableDef)
       }
-      return TableDef
+      return tableDef
     } catch (e: any) {
-      console.error(e)
+      console.error(e?.sqlMessage ?? e.toString())
       return null
     }
   }
 
-  public async Sync(Schema: TSchemaChain, Data: any): Promise<void> {
-    const TableName = SchemaTableName(Schema)
-    await this._Init()
-    const TableDef = await this._GetTableDefinition(Schema)
-    const NewTable: ITableDefinition = { Name: TableName, FullSchemaPath: SchemaChainFriendly(Schema), Fields: [] }
-    if (typeof Data === 'object' && !Array.isArray(Data)) {
+  public async sync(name: string, data: any): Promise<void> {
+    const tableDef = await this.getTableDefinition(name)
+    const newTable: ITableDefinition = { name, fields: [] }
+    if (typeof data === 'object' && !Array.isArray(data)) {
       const cols: string[] = []
-      const keys = Object.keys(Data)
+      const keys = Object.keys(data)
       keys.forEach(k => {
-        const v = Data[k]
-        const existingFieldDef = (TableDef && TableDef.Fields.find(f => f.Field.toLowerCase() === k.toLowerCase())) || null
-        const field = this._GetDataType(v, k, existingFieldDef)
-        NewTable.Fields.push(field)
-        const fieldDef = `\`${k}\` ${field.FullDefinition}`
-        if (k.toUpperCase() === 'ID') cols.unshift(fieldDef)
+        const v = data[k]
+        const newFieldName = toSnake(k)
+        const existingFieldDef = (tableDef && tableDef.fields.find(f => f.field === newFieldName)) || null
+        const field = this.getDataType(v, newFieldName, existingFieldDef)
+        newTable.fields.push(field)
+        const fieldDef = `\`${newFieldName}\` ${field.fullDefinition}`
+        if (newFieldName=== 'id') cols.unshift(fieldDef)
         else cols.push(fieldDef)
       })
 
       if (!cols.length) return
 
-      cols.push('`CreatedAt` timestamp not null default current_timestamp')
-      cols.push('`LastModifiedAt` timestamp not null default current_timestamp on update current_timestamp')
+      cols.push('`created_at` timestamp not null default current_timestamp')
+      cols.push('`last_modified_at` timestamp not null default current_timestamp on update current_timestamp')
 
-      if (TableDef) { // alter existing table
+      if (tableDef) { // alter existing table
 
         const queries: string[] = []
         const FieldsToCreate: IFieldDefinition[] = []
@@ -121,36 +92,36 @@ export class SchemaSync {
           'varchar', 'text', 'mediumtext', 'longtext',
         ]
 
-        for (const newField of NewTable.Fields) {
-          const oldField = TableDef.Fields.find(f => f.Field.toLowerCase() === newField.Field.toLowerCase())
+        for (const newField of newTable.fields) {
+          const oldField = tableDef.fields.find(f => f.field.toLowerCase() === newField.field.toLowerCase())
           if (!oldField) {
             FieldsToCreate.push(newField)
           } else if (
-            ((oldField.DataLength1 !== newField.DataLength1 && (newField.DataLength1 || 0) > (oldField.DataLength1 || 0)) ||
-              oldField.DataLength2 !== newField.DataLength2 && (newField.DataLength2 || 0) > (oldField.DataLength2 || 0) ||
-              (oldField.DataType.toLowerCase() !== newField.DataType.toLowerCase())
+            ((oldField.dataLength1 !== newField.dataLength1 && (newField.dataLength1 || 0) > (oldField.dataLength1 || 0)) ||
+              oldField.dataLength2 !== newField.dataLength2 && (newField.dataLength2 || 0) > (oldField.dataLength2 || 0) ||
+              (oldField.dataType.toLowerCase() !== newField.dataType.toLowerCase())
             ) &&
-            (!DataTypeIsNumber(newField.DataType) || DataTypeIsNumber(oldField.DataType)) &&
-            (TypesHierarchy.indexOf(oldField.DataType.toLowerCase()) <= TypesHierarchy.indexOf(newField.DataType))
+            (!dataTypeIsNumber(newField.dataType) || dataTypeIsNumber(oldField.dataType)) &&
+            (TypesHierarchy.indexOf(oldField.dataType.toLowerCase()) <= TypesHierarchy.indexOf(newField.dataType))
           ) {
             FieldsToAlter.push(newField)
           }
         }
 
         FieldsToAlter.forEach(f => {
-          queries.push(`alter table ${SchemaChain(Schema)} modify \`${f.Field}\` ${f.FullDefinition}`)
-          Object.assign(TableDef.Fields.find(f2 => {
-            return f2.Field.toLowerCase() === f.Field.toLowerCase()
+          queries.push(`alter table \`${this.dbName}\`.\`${name}\` modify \`${f.field}\` ${f.fullDefinition}`)
+          Object.assign(tableDef.fields.find(f2 => {
+            return f2.field.toLowerCase() === f.field.toLowerCase()
           }) || {}, f)
         })
         FieldsToCreate.forEach(f => {
-          queries.push(`alter table ${SchemaChain(Schema)} add column \`${f.Field}\` ${f.FullDefinition}`)
-          TableDef.Fields.push(f)
+          queries.push(`alter table \`${this.dbName}\`.\`${name}\` add column \`${f.field}\` ${f.fullDefinition}`)
+          tableDef.fields.push(f)
         })
 
         for (const q of queries) {
           try {
-            await this._Connection.query(q)
+            await this.connection.query(q)
           } catch (e) {
             console.error(e)
             console.error(q)
@@ -159,21 +130,26 @@ export class SchemaSync {
 
       } else { // create new table
 
-        let UniqKey = ''
+        let uniqKey = ''
+        let uniqKeyCount = 0
         // Add unique keys
-        if (this._schemaKeys && this._schemaKeys[SchemaChainFriendly(Schema)]) {
-          const Keys = this._schemaKeys[SchemaChainFriendly(Schema)]
-          const DataKeys = Object.keys(Data).map(k => k.toLowerCase())
-          if (Keys.filter(k => !DataKeys.includes(k.toLowerCase())).length === 0) {
-            UniqKey = `, UNIQUE KEY _uniq (\`${Keys.join('`, `')}\`) `
+        if (this.schemaKeys && this.schemaKeys[name]) {
+          const keys     = this.schemaKeys[name]
+          const dataKeys = new Set<string>(Object.keys(data).map(k => toSnake(k)))
+          for (const key of keys) {
+            if (key.type === EKeyTypes.Unique) {
+              if (key.fields.filter(k => !dataKeys.has(toSnake(k))).length === 0) {
+                uniqKey = `, UNIQUE KEY _uniq${uniqKeyCount} (\`${keys.join('`, `')}\`) `
+              }
+              uniqKeyCount++
+            }
           }
         }
 
-        const tableDefinition = `create table ${SchemaChain(Schema)} (${cols.join(', ')}, primary key (ID)${UniqKey})`
+        const tableDefinition = `create table \`${this.dbName}\`.\`${name}\` (${cols.join(', ')}, primary key (id)${uniqKey})`
 
-        console.log('NEW Table', tableDefinition)
         try {
-          await this._Connection.query(tableDefinition)
+          await this.connection.query(tableDefinition)
         } catch (e) {
           console.error(e)
         }
@@ -181,100 +157,111 @@ export class SchemaSync {
     }
   }
 
-  private _GetDataType(data: any, fieldName: string, existingFieldDef: IFieldDefinition | null): IFieldDefinition {
-    const finalData = this.PrepareData(data)
+  private getDataType(data: any, fieldName: string, existingFieldDef: IFieldDefinition | null): IFieldDefinition {  
+    const finalData = prepareData(data)
     let definition = ''
     let output: IFieldDefinition = {
-      Field: fieldName,
-      DataType: '',
-      FullDefinition: '',
-      DataLength2: null,
-      DataLength1: null,
+      field: fieldName,
+      dataType: '',
+      fullDefinition: '',
+      dataLength2: null,
+      dataLength1: null,
     }
-    const textCharSet = 'character set utf8mb4 collate utf8mb4_unicode_ci'
+    
+    const textCharSet = 'character set utf8mb4 collate utf8mb4_general_ci'
     if (finalData instanceof Date) {
-      definition = output.DataType = 'timestamp'
+      definition = output.dataType = 'timestamp'
     } else {
       switch (typeof finalData) {
         case 'string':
           if (finalData.length < 5000) {
-            output.DataLength1 = finalData.length
-            output.DataType = 'varchar'
-            definition = `${output.DataType} (${finalData.length}) ${textCharSet}`
+            output.dataLength1 = finalData.length
+            output.dataType = 'varchar'
+            definition = `${output.dataType} (${finalData.length}) ${textCharSet}`
           } else if (finalData.length < 65535) {
-            output.DataLength1 = 65535
-            output.DataType = 'text'
-            definition = `${output.DataType} ${textCharSet}`
+            output.dataLength1 = 65535
+            output.dataType = 'text'
+            definition = `${output.dataType} ${textCharSet}`
           } else if (finalData.length < 16777215) {
-            output.DataLength1 = 16777215
-            output.DataType = 'mediumtext'
-            definition = `${output.DataType} ${textCharSet}`
+            output.dataLength1 = 16777215
+            output.dataType = 'mediumtext'
+            definition = `${output.dataType} ${textCharSet}`
           } else {
-            output.DataType = 'longtext'
-            definition = `${output.DataType} ${textCharSet}`
+            output.dataType = 'longtext'
+            definition = `${output.dataType} ${textCharSet}`
           }
           break
         case 'number':
-          if (typeof data === 'boolean' || (existingFieldDef?.DataType.toLowerCase() === 'boolean' && [0, 1].includes(data))) {
-            definition = output.DataType = 'boolean'
+          if (typeof data === 'boolean' || (existingFieldDef?.dataType.toLowerCase() === 'boolean' && [0, 1].includes(data))) {
+            definition = output.dataType = 'boolean'
             break
           }
           const str = finalData.toString()
           if (str.includes('.')) {
             const Split = str.split('.')
             const numDecimalPlaces = Split[1].length
-            output.DataLength1 = str.length - 1
-            output.DataLength2 = Math.min(numDecimalPlaces, 30)
-            output.DataLength1 = Math.max(output.DataLength1, output.DataLength2)
-            output.DataType = 'decimal'
-            definition = `${output.DataType} (${output.DataLength1},${output.DataLength2})`
+            output.dataLength1 = str.length - 1
+            output.dataLength2 = Math.min(numDecimalPlaces, 30)
+            output.dataLength1 = Math.max(output.dataLength1, output.dataLength2)
+            output.dataType = 'decimal'
+            definition = `${output.dataType} (${output.dataLength1},${output.dataLength2})`
           } else {
             if (finalData >= -32767 && finalData <= 32767) {
-              definition = output.DataType = 'smallint'
+              definition = output.dataType = 'smallint'
             } else if (finalData >= -8388607 && finalData <= 8388607) {
-              definition = output.DataType = 'mediumint'
+              definition = output.dataType = 'mediumint'
             } else if (finalData >= -2147483647 && finalData <= 2147483647) {
-              definition = output.DataType = 'int'
+              definition = output.dataType = 'int'
             } else {
-              definition = output.DataType = 'bigint'
+              definition = output.dataType = 'bigint'
             }
           }
           break
       }
     }
-    output.FullDefinition = definition
+    output.fullDefinition = definition
     return output
   }
 
-  public PrepareData(data: any): any {
-    if (data instanceof Date) return data
-    switch (typeof data) {
-      case 'string':
-      case 'number':
-        return data
-      case 'boolean':
-        return data ? 1 : 0
-      default:
-        return JSON.stringify(data)
-    }
-  }
+}
 
+export const prepareData = (data: any): any => {
+  if (data instanceof Date) return data
+  switch (typeof data) {
+    case 'string':
+    case 'number':
+      return data
+    case 'boolean':
+      return data ? 1 : 0
+    default:
+      return JSON.stringify(data)
+  }
 }
 
 interface IFieldDefinition {
-  Field: string
-  DataType: string
-  DataLength1: number | null
-  DataLength2: number | null
-  FullDefinition: string
+  field: string
+  dataType: string
+  dataLength1: number | null
+  dataLength2: number | null
+  fullDefinition: string
 }
 
 interface ITableDefinition {
-  Name: string
-  FullSchemaPath: string
-  Fields: IFieldDefinition[]
+  name: string
+  fields: IFieldDefinition[]
 }
 
-const DataTypeIsNumber = (s: string) => {
+const dataTypeIsNumber = (s: string) => {
   return s.toLowerCase().includes('int') || s.toLowerCase().includes('decimal') || s.toLowerCase().includes('float')
+}
+
+
+export interface IKey {
+  fields: string[]
+  type: EKeyTypes
+}
+
+export enum EKeyTypes {
+  Unique = 'UNIQUE',
+  Index = 'INDEX'
 }

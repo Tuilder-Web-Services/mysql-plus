@@ -1,53 +1,46 @@
-import { DBConnection } from "./connect"
-import { TableChangeType } from "./enums"
-import { DataSubscriptions } from "./events"
-import { SchemaChain, SchemaChainFriendly, TSchemaChain } from "./utils"
+import { Connection } from "mysql2/promise"
+import { toSnake } from "./utils"
+import { prepareData } from "./sync"
 
-export async function DbDelete(
-  Schema: TSchemaChain,
-  IDs: string | string[]
-) {
-  IDs = typeof IDs === 'string' ? [IDs] : IDs
-  if (!IDs.length || !IDs) return
-  const Mysql = await DBConnection()
-  const Query = `delete from ${SchemaChain(Schema)} where ID in (${IDs.map(_ => '?').join(', ')})`
-  const Values = [...IDs]
+export async function dbDelete(db: Connection, database: string, table: string, ids: string | string[]): Promise<string[]> {
+  ids = typeof ids === 'string' ? [ids] : ids
+  if (!ids.length || !ids) return []
+  const Query = `delete from \`${database}\`.\`${toSnake(table)}\` where id in (${ids.map(_ => '?').join(', ')})`
+  const Values = [...ids]
   try {
-    await Mysql.query(Query, Values)
-    IDs.forEach(ID => {
-      DataSubscriptions.NotifySubscribers(SchemaChainFriendly(Schema), { ID }, TableChangeType.Deleted)
-    })
-    return true
+    await db.query(Query, Values)
+    return ids
   } catch (e) {
     console.error(e)
-    console.error(Query, IDs)
-    return false
+    console.error(Query, ids)
+    return []
   }
 }
 
-export async function DBDeleteWhere(Schema: TSchemaChain, Cols: string[], Vals: ((string | number)[])[]) {
-  if (!Cols || !Cols.length) return
-  const Mysql = await DBConnection()
-  const Values: (string | number)[] = []
-  const WhereStatements = Cols.map((c, idx) => `\`${c}\` in (${Vals[idx].map(v => {
-    Values.push(v)
-    return '?'
-  })})`).join(' and ')
-  const Query = `select id from ${SchemaChain(Schema)} where ${WhereStatements}`
+export async function dbDeleteWhere(db: Connection, database: string, table: string, cols: string[], vals: ((string | number)[] | string | number)[]): Promise<string[]> {
+  if (!cols || !cols.length) return []
+  const values: (string | number)[] = []
+  const whereStatements: string[] = []
+  for (const [idx, col] of cols.entries()) {
+    const val = vals[idx]
+    if (Array.isArray(val)) {
+      whereStatements.push(`\`${col}\` in (${val.map(v => {
+        values.push(prepareData(v))
+        return '?'
+      }).join(', ')})`)
+    } else {
+      whereStatements.push(`\`${col}\` = ?`)
+      values.push(prepareData(val))
+    }
+  }
+  const query = `select id from \`${database}\`.\`${toSnake(table)}\` where ${whereStatements.join(' and ')}`  
   try {
-    const [rows] = await Mysql.query(Query, Values) as any[]
-    const IDs = rows.map((r: { ID: string }) => r.ID)
-    return await DbDelete(Schema, IDs)
+    const [rows] = await db.query(query, values) as any[]
+    const ids = rows.map((r: { id: string }) => r.id)
+    return await dbDelete(db, database, table, ids)
   } catch (e) {
     console.error(e)
-    console.error(Query, Values)
+    console.error(query, values)
   }
-  return false
-}
-
-export async function DbCascadeDelete(Table: string, Tables: string[], Key: string, Value: string) {
-  await DBDeleteWhere(Table, ['id'], [[Value]])
-  for (const t of Tables) {
-    await DBDeleteWhere(t, [Key], [[Value]])
-  }
+  return []
 }
