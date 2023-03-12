@@ -1,22 +1,29 @@
 import { Connection, ConnectionOptions, createConnection } from "mysql2/promise";
+import { nanoid } from "nanoid";
 import { dbRead, IReadParams } from "./read";
-import { toSnake, toCamel, toPascal } from "./utils";
+import { toSnake, toCamel } from "./utils";
 import { IKey, prepareData, SchemaSync } from "./sync";
 import { EDbOperations, ETableChangeType } from "./enums";
 import { Subject } from "rxjs";
-import { dbDelete, dbDeleteWhere } from "./delete";
+import { dbDeleteWhere } from "./delete";
 
 export interface IDbConnectOptions extends ConnectionOptions {
   database: string
   schemaKeys?: Record<string, IKey[]>,
   defaults?: (schema: string, table: string, data: Record<any, any>) => Record<any, any>,
+  auditTrailEnabled?: boolean,
+  auditTrailSkipTables?: string[],
 }
 
 export class MySQLPlus {
 
   private connection: Promise<Connection>
+
   private databaseName: string
+
   private sync: Promise<SchemaSync>
+
+  public eventStream = new Subject<IDbEvent>()
 
   constructor(private readonly options: IDbConnectOptions) {
     this.connection = createConnection({
@@ -32,9 +39,30 @@ export class MySQLPlus {
         resolve(sync)
       })
     })
-  }
 
-  public eventStream = new Subject<IDbEvent>()
+    const auditTrailEnabled = options.auditTrailEnabled ?? true
+    const auditTrailSkipTables = new Set(options.auditTrailSkipTables ?? [])
+
+    if (auditTrailEnabled) {
+      const permissions = {
+        tables: {
+          audit_trail: {
+            operations: new Set([EDbOperations.Write])
+          }
+        }
+      }
+      this.eventStream.subscribe(e => {
+        if (auditTrailSkipTables.has(e.table)) {
+          return
+        }
+        this.write(permissions, 'audit_trail', {
+          table_name: e.table,
+          operation: ETableChangeType[e.type],
+          data: JSON.stringify(e.data)
+        })
+      })
+    }
+  }
 
   public getConnection = async () => {
     return await this.connection
@@ -47,12 +75,12 @@ export class MySQLPlus {
 
     if (
       (permissions.global?.has(operation) ||
-      permissions.tables?.[table]?.operations?.has(operation)) && 
+        permissions.tables?.[table]?.operations?.has(operation)) &&
       !fields.some(f => permissions.tables?.[table]?.protectedFields?.has(f))
     ) {
       return
     }
-    
+
     throw new Error(`Permission denied: ${operationName} on ${table}`)
   }
 
@@ -79,7 +107,7 @@ export class MySQLPlus {
     this.checkPermissions(permissions, EDbOperations.Delete, table)
     if (permissions.qualifiers) {
       Object.assign(params, permissions.qualifiers)
-    }    
+    }
     const idsDeleted = await dbDeleteWhere(await this.connection, this.databaseName, table, Object.keys(params), Object.values(params))
     this.eventStream.next({
       type: ETableChangeType.Deleted,
@@ -90,17 +118,20 @@ export class MySQLPlus {
   }
 
   public async write<T = any>(permissions: IDbPermissions, tableName: string, data: any, options: IDBWriteOptions = {}) {
-    
+
     this.checkPermissions(permissions, EDbOperations.Write, tableName, Object.keys(data))
 
     const syncService = await this.sync
 
     tableName = toSnake(tableName)
-    
+
     const db = await this.connection
     const addDefaults = this.options.defaults
     if (addDefaults !== undefined) {
       data = addDefaults(this.databaseName, toCamel(tableName), data)
+    }
+    if (!data.id) {
+      data.id = nanoid()
     }
     Object.keys(data).forEach(k => {
       if (['created_at', 'last_modified_at'].includes(k.toLowerCase())) {
@@ -141,7 +172,7 @@ export class MySQLPlus {
           set ${Object.keys(updateData).map(k => `\`${toSnake(k)}\`=${data[k] === null ? 'NULL' : '?'}`).join(`,`)}
           where ${Object.keys(whereData).map(k => `\`${toSnake(k)}\`=?`).join(` and `)}`
         const values = Object.keys(updateData).filter(k => data[k] !== null).map(k => prepareData(data[k]))
-        values.push(...Object.keys(whereData).map(k => prepareData(whereData[k])))         
+        values.push(...Object.keys(whereData).map(k => prepareData(whereData[k])))
         try {
           await db.query(UpdateQuery, values)
           what = ETableChangeType.Updated
