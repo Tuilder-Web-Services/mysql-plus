@@ -29,12 +29,12 @@ db.eventStream.subscribe(e => {
 
   const permissions: IDbPermissions = {
     global: new Set([EDbOperations.Read, EDbOperations.Write, EDbOperations.Delete]),
-    // tables: {
-    //   camp_people: {
-    //     operations: new Set([EDbOperations.Read]),
-    //     protectedFields: new Set(['age'])
-    //   }
-    // }
+    tables: {
+      camp_people: {
+        operations: new Set([EDbOperations.Read]),
+        protectedFields: new Set(['age'])
+      }
+    },
     qualifiers: {
       _account: accountId
     }
