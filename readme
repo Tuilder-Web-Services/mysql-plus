@@ -14,7 +14,7 @@
 
 ## Usage
 
-```
+```typescript
 import { IDbPermissions, MySQLPlus, EDbOperations, ETableChangeType } from '@tuilder/mysql-plus';
 
 const db = new MySQLPlus({

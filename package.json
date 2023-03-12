@@ -29,14 +29,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EmanH/mysql-schema-manager.git"
+    "url": "git+https://github.com/Tuilder-Web-Services/mysql-plus.git"
   },
   "author": "Emmanuel Higgins",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/EmanH/mysql-schema-manager/issues"
+    "url": "https://github.com/Tuilder-Web-Services/mysql-plus/issues"
   },
-  "homepage": "https://github.com/EmanH/mysql-schema-manager#readme",
+  "homepage": "https://github.com/Tuilder-Web-Services/mysql-plus#readme",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^5.54.1",
     "dotenv": "^16.0.3",
