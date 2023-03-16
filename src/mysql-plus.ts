@@ -30,6 +30,8 @@ export class MySQLPlus {
       host: options.host,
       user: options.user,
       password: options.password,
+      port: options.port,
+      pool: options.pool      
     })
     this.databaseName = options.database
     this.sync = new Promise<SchemaSync>(resolve => {
