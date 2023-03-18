@@ -25,6 +25,8 @@ export class MySQLPlus {
 
   public eventStream = new Subject<IDbEvent>()
 
+  public entities = new Set<string>()
+
   constructor(private readonly options: IDbConnectOptions) {
     this.connection = createConnection({
       host: options.host,
@@ -65,6 +67,17 @@ export class MySQLPlus {
         })
       })
     }
+
+    // Entities
+    this.getConnection().then(async connection => {
+      const [rows] = await connection.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`);
+      if (rows.length) {
+        const entities = await this.read<{ name: string }[]>({global: new Set([EDbOperations.Read])}, '_entities')
+        entities?.forEach(e => this.entities.add(e.name))
+      } else {
+        await connection.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
+      }
+    })
   }
 
   public getConnection = async () => {
@@ -135,7 +148,7 @@ export class MySQLPlus {
     }
     if (!data.id) {
       data.id = nanoid()
-      // data.id = Math.random().toString(36).substr(2, 9)
+      // data.id = Math.random().toString(36).substring(2, 9)
     }
     Object.keys(data).forEach(k => {
       if (['created_at', 'last_modified_at'].includes(k.toLowerCase())) {
@@ -198,6 +211,7 @@ export class MySQLPlus {
         database: this.databaseName
       })
     }
+    this.entities.add(toCamel(tableName))
     return data as T
   }
 

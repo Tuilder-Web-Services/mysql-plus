@@ -1,5 +1,5 @@
 import { Connection } from 'mysql2/promise'
-import { toSnake } from './utils'
+import { toCamel, toSnake } from './utils'
 
 export class SchemaSync {
 
@@ -150,6 +150,7 @@ export class SchemaSync {
 
         try {
           await this.connection.query(tableDefinition)
+          await this.connection.query(`insert into \`${this.dbName}\`.\`_entities\` (\`name\`) values (?)`, [toCamel(name)])
         } catch (e) {
           console.error(e)
         }
