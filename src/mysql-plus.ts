@@ -13,6 +13,7 @@ export interface IDbConnectOptions extends ConnectionOptions {
   defaults?: (schema: string, table: string, data: Record<any, any>) => Record<any, any>,
   auditTrailEnabled?: boolean,
   auditTrailSkipTables?: string[],
+  failOnMissingDb?: boolean,
 }
 
 export class MySQLPlus {
@@ -39,7 +40,10 @@ export class MySQLPlus {
     this.sync = new Promise<SchemaSync>(resolve => {
       this.connection.then(async connection => {
         const sync = new SchemaSync(connection, this.databaseName, options.schemaKeys)
-        await sync.checkSchema()
+        if (!await sync.checkSchema(options.failOnMissingDb)) {
+          await this.destroy()
+          throw new Error(`Database ${this.databaseName} does not exist`)
+        }
         resolve(sync)
       })
     })
@@ -213,6 +217,13 @@ export class MySQLPlus {
     }
     this.entities.add(toCamel(tableName))
     return data as T
+  }
+
+  public async destroy() {
+    this.eventStream.complete();
+    const connection = await this.connection;
+    connection.end();
+    connection.destroy()
   }
 
 }

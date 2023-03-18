@@ -7,11 +7,15 @@ export class SchemaSync {
 
   constructor(private connection: Connection, private dbName: string, private schemaKeys?: Record<string, IKey[]>) {}
 
-  public async checkSchema() {
+  public async checkSchema(failOnMissingDb = false): Promise<boolean> {
     const { dbName } = this
     const [rows] = await this.connection.query(`select count(*) as \`Exists\` from information_schema.schemata WHERE schema_name = ?`, dbName) as any[]
     const exists = rows[0].Exists
     if (!exists) {
+      if (failOnMissingDb) {
+        console.error(`Database ${dbName} does not exist`)
+        return false
+      }
       try {
         await this.connection.query(`create database \`${dbName}\` character set 'utf8mb4' collate 'utf8mb4_general_ci'`)
       } catch (e) {
@@ -19,6 +23,7 @@ export class SchemaSync {
       }
       await this.connection.query(`use \`${dbName}\``)
     }
+    return true
   }
 
   public async getTableDefinition(name: string): Promise<ITableDefinition | null> {
