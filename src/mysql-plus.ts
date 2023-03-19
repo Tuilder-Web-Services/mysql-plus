@@ -76,7 +76,7 @@ export class MySQLPlus {
     this.getConnection().then(async connection => {
       const [rows] = await connection.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`);
       if (rows.length) {
-        const entities = await this.read<{ name: string }[]>({global: new Set([EDbOperations.Read])}, '_entities')
+        const entities = await this.read<{ name: string }[]>({default: new Set([EDbOperations.Read])}, '_entities')
         entities?.forEach(e => this.entities.add(e.name))
       } else {
         await connection.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
@@ -93,15 +93,19 @@ export class MySQLPlus {
     fields = fields?.map(f => toSnake(f)) ?? []
     const operationName = EDbOperations[operation]
 
-    if (
-      (permissions.global?.has(operation) ||
-        permissions.tables?.[table]?.operations?.has(operation)) &&
-      !fields.some(f => permissions.tables?.[table]?.protectedFields?.has(f))
-    ) {
-      return
+    const hasProtectedField = fields.some(f => permissions.tables?.[table]?.protectedFields?.has(f))
+
+    let allowed = false
+
+    if (permissions.tables?.[table]) {
+      allowed = (permissions.tables?.[table]?.operations?.has(operation) && !hasProtectedField) === true
+    } else {
+      allowed = (permissions.default?.has(operation) && !hasProtectedField) === true
     }
 
-    throw new Error(`Permission denied: ${operationName} on ${table}`)
+    if (!allowed) {
+      throw new Error(`Permission denied: ${operationName} on ${table}`)
+    }
   }
 
   public async read<T>(permissions: IDbPermissions, table: string, params?: IReadParams): Promise<T | null> {
@@ -239,7 +243,7 @@ export interface IDbEvent {
 }
 
 export interface IDbPermissions {
-  global?: Set<EDbOperations>,
+  default?: Set<EDbOperations>,
   tables?: Record<string, {
     protectedFields?: Set<string>,
     operations?: Set<EDbOperations>,
