@@ -141,6 +141,11 @@ export class MySQLPlus<TSessionContext = any> {
     })
   }
 
+  public async query<T = any>(query: string, params?: any[]): Promise<T[]> {
+    const connection = await this.connection
+    return await connection.query(query, params) as any[]
+  }
+
   public async write<T = any>(permissions: IDbPermissions, tableName: string, data: any, options: IDBWriteOptions<TSessionContext> = {}) {
 
     this.checkPermissions(permissions, EDbOperations.Write, tableName, Object.keys(data))
