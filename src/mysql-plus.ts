@@ -7,16 +7,16 @@ import { EDbOperations, ETableChangeType } from "./enums";
 import { Subject } from "rxjs";
 import { dbDeleteWhere } from "./delete";
 
-export interface IDbConnectOptions extends ConnectionOptions {
+export interface IDbConnectOptions<TSessionContext> extends ConnectionOptions {
   database: string
   schemaKeys?: Record<string, IKey[]>,
-  defaults?: (schema: string, table: string, data: Record<any, any>) => Record<any, any>,
+  defaults?: (schema: string, table: string, data: Record<any, any>, sessionContext?: TSessionContext) => Record<any, any>,
   auditTrailEnabled?: boolean,
   auditTrailSkipTables?: string[],
   failOnMissingDb?: boolean,
 }
 
-export class MySQLPlus {
+export class MySQLPlus<TSessionContext> {
 
   private connection: Promise<Connection>
 
@@ -28,7 +28,7 @@ export class MySQLPlus {
 
   public entities = new Set<string>()
 
-  constructor(private readonly options: IDbConnectOptions) {
+  constructor(private readonly options: IDbConnectOptions<TSessionContext>) {
     this.connection = createConnection({
       host: options.host,
       user: options.user,
@@ -141,7 +141,7 @@ export class MySQLPlus {
     })
   }
 
-  public async write<T = any>(permissions: IDbPermissions, tableName: string, data: any, options: IDBWriteOptions = {}) {
+  public async write<T = any>(permissions: IDbPermissions, tableName: string, data: any, options: IDBWriteOptions<TSessionContext> = {}) {
 
     this.checkPermissions(permissions, EDbOperations.Write, tableName, Object.keys(data))
 
@@ -232,7 +232,8 @@ export class MySQLPlus {
 
 }
 
-export interface IDBWriteOptions {
+export interface IDBWriteOptions<TSessionContext> {
+  sessionContext?: TSessionContext
 }
 
 export interface IDbEvent {

@@ -11,11 +11,11 @@
     },
     ".": {
       "types": "./lib/index.d.ts",
-      "default": "./lib/index.mjs",
       "node": "./lib/index.mjs",
       "import": "./lib/index.mjs",
       "require": "./lib/index.js",
-      "es2022": "./lib/index.mjs"
+      "es2022": "./lib/index.mjs",
+      "default": "./lib/index.mjs"
     }
   },
   "files": [
