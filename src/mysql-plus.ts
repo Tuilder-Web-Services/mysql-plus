@@ -20,7 +20,7 @@ export class MySQLPlus<TSessionContext = any> {
 
   private connection: Promise<Connection>
 
-  private databaseName: string
+  public databaseName: string
 
   private sync: Promise<SchemaSync>
 
