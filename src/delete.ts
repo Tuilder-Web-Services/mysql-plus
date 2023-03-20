@@ -21,7 +21,7 @@ export async function dbDeleteWhere(db: Connection, database: string, table: str
   if (!Object.keys(params).length) return []
   const values: (string | number)[] = []
   const whereStatements: string[] = []
-  for (const [key, value] of params.entries()) {
+  for (const [key, value] of Object.entries(params)) {
     if (Array.isArray(value)) {
       whereStatements.push(`\`${key}\` in (${value.map(v => {
         values.push(prepareData(v))
