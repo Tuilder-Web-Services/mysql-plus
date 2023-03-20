@@ -67,7 +67,7 @@ export class MySQLPlus<TSessionContext = any> {
         this.write(permissions, 'audit_trail', {
           table_name: e.table,
           operation: ETableChangeType[e.type],
-          data: JSON.stringify(e.data)
+          data: JSON.stringify(e.data, (_key, value) => (value instanceof Set ? [...value] : value))
         })
       })
     }

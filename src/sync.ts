@@ -240,7 +240,7 @@ export const prepareData = (data: any): any => {
     case 'boolean':
       return data ? 1 : 0
     default:
-      return JSON.stringify(data)
+      return JSON.stringify(data, (_key, value) => (value instanceof Set ? [...value] : value))
   }
 }
 
