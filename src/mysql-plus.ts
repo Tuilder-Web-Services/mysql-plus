@@ -132,13 +132,15 @@ export class MySQLPlus<TSessionContext = any> {
     if (permissions.qualifiers) {
       Object.assign(params, permissions.qualifiers)
     }
-    const idsDeleted = await dbDeleteWhere(await this.connection, this.databaseName, table, Object.keys(params), Object.values(params))
-    this.eventStream.next({
-      type: ETableChangeType.Deleted,
-      table: toCamel(table),
-      data: idsDeleted,
-      database: this.databaseName,
-    })
+    const idsDeleted = await dbDeleteWhere(await this.connection, this.databaseName, table, params)
+    if (idsDeleted.length) {
+      this.eventStream.next({
+        type: ETableChangeType.Deleted,
+        table: toCamel(table),
+        data: idsDeleted,
+        database: this.databaseName,
+      })
+    }
   }
 
   public async query<T = any>(query: string, params?: any[]): Promise<T[]> {
