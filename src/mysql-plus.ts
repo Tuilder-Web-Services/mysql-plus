@@ -16,7 +16,7 @@ export interface IDbConnectOptions<TSessionContext> extends ConnectionOptions {
   failOnMissingDb?: boolean,
 }
 
-export class MySQLPlus<TSessionContext> {
+export class MySQLPlus<TSessionContext = any> {
 
   private connection: Promise<Connection>
 
