@@ -1,6 +1,6 @@
 import { Connection, ConnectionOptions, createConnection } from "mysql2/promise";
 import { nanoid } from "nanoid";
-import { dbRead, IReadParams } from "./read";
+import { dbRead, IDBReadOptions } from "./read";
 import { toSnake, toCamel } from "./utils";
 import { IKey, prepareData, SchemaSync } from "./sync";
 import { EDbOperations, ETableChangeType } from "./enums";
@@ -108,7 +108,7 @@ export class MySQLPlus<TSessionContext = any> {
     }
   }
 
-  public async read<T>(permissions: IDbPermissions, table: string, params?: IReadParams): Promise<T | null> {
+  public async read<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
     const tableName = toSnake(table)
     const tableDef = await (await this.sync).getTableDefinition(tableName)
     const columns: string[] = (params?.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
@@ -118,7 +118,7 @@ export class MySQLPlus<TSessionContext = any> {
     return await dbRead<T>(await this.connection, this.databaseName, table, params, await this.sync)
   }
 
-  public async readFirst<T>(permissions: IDbPermissions, table: string, params?: IReadParams): Promise<T | null> {
+  public async readFirst<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
     return await this.read<T>(permissions, table, Object.assign((params || {}), { firstOnly: true }))
   }
 

@@ -1,6 +1,7 @@
-import { IDbConnectOptions, IDbEvent, IDbPermissions } from "./mysql-plus";
+import { IDbConnectOptions, IDbEvent, IDbPermissions, IDBWriteOptions } from "./mysql-plus";
 import { MySQLPlus } from "./mysql-plus";
 import { EDbOperations, ETableChangeType } from "./enums";
+import { IDBReadOptions } from './read';
 
 export {
   IDbConnectOptions,
@@ -8,5 +9,8 @@ export {
   IDbPermissions,
   MySQLPlus,
   EDbOperations,
-  ETableChangeType
+  ETableChangeType,
+  IDBReadOptions,
+  IDBWriteOptions
 }
+

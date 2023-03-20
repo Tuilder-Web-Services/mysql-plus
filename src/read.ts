@@ -2,7 +2,7 @@ import { Connection } from "mysql2/promise"
 import { SchemaSync } from "./sync"
 import { toCamel, toSnake } from "./utils"
 
-export interface IReadParams {
+export interface IDBReadOptions {
   id?: string,
   columns?: string | string[],
   where?: Record<string, any>,
@@ -11,24 +11,24 @@ export interface IReadParams {
   skipAppendAccount?: boolean,
 }
 
-export async function dbRead<T>(db: Connection, database: string, tableName: string, params: IReadParams = {}, syncService: SchemaSync): Promise<null | T> {
+export async function dbRead<T>(db: Connection, database: string, tableName: string, options: IDBReadOptions = {}, syncService: SchemaSync): Promise<null | T> {
 
   tableName = toSnake(tableName)
   const tableDef = await syncService.getTableDefinition(tableName)
-  const columns: string[] = (params.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
+  const columns: string[] = (options.columns ? (typeof options.columns === 'string' ? [options.columns] : [...options.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
   const whereValues: any[]     = []
   const whereColumns: string[] = []
 
-  if (params.where && Object.keys(params.where).length > 0) {
-    for (const key of Object.keys(params.where)) {
+  if (options.where && Object.keys(options.where).length > 0) {
+    for (const key of Object.keys(options.where)) {
       whereColumns.push(toSnake(key))
-      whereValues.push(params.where[key])
+      whereValues.push(options.where[key])
     }
   }
 
-  if (params.id) {
+  if (options.id) {
     columns.push('id')
-    whereValues.push(params.id)
+    whereValues.push(options.id)
     whereColumns.push('id')
   }
 
@@ -47,7 +47,7 @@ export async function dbRead<T>(db: Connection, database: string, tableName: str
     const [rows] = await db.query(query, whereValues) as any[]
 
     if (rows.length) {
-      if (params.firstOnly) {
+      if (options.firstOnly) {
         return rows[0] as T
       } else {
         return rows as T
