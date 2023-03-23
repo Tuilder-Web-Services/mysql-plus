@@ -1,41 +1,47 @@
-import { Connection } from 'mysql2/promise'
+import { Connection, Pool } from 'mysql2/promise'
 import { stringify, toCamel, toSnake } from './utils'
 
 export class SchemaSync {
 
   private tableDefinitions = new Map<string, ITableDefinition>()
 
-  constructor(private connection: Connection, private dbName: string, private schemaKeys?: Record<string, IKey[]>) {}
+  constructor(private connectionPool: Pool, private dbName: string, private schemaKeys?: Record<string, IKey[]>) {}
 
   public async checkSchema(failOnMissingDb = false): Promise<boolean> {
+    const connection = await this.connectionPool.getConnection()
     const { dbName } = this
-    const [rows] = await this.connection.query(`select count(*) as \`Exists\` from information_schema.schemata WHERE schema_name = ?`, dbName) as any[]
+    const [rows] = await connection.query(`select count(*) as \`Exists\` from information_schema.schemata WHERE schema_name = ?`, dbName) as any[]
     const exists = rows[0].Exists
     if (!exists) {
       if (failOnMissingDb) {
         console.error(`Database ${dbName} does not exist`)
+        connection.release()
         return false
       }
       try {
-        await this.connection.query(`create database \`${dbName}\` character set 'utf8mb4' collate 'utf8mb4_general_ci'`)
+        await connection.query(`create database \`${dbName}\` character set 'utf8mb4' collate 'utf8mb4_general_ci'`)
+        await connection.query(`use \`${dbName}\``)
       } catch (e) {
         console.error(e)
       }
-      await this.connection.query(`use \`${dbName}\``)
     }
+    connection.release()
     return true
   }
 
   public async tableExists(name: string): Promise<boolean> {
-    const [rows] = await this.connection.query(`select count(*) as \`Exists\` from information_schema.tables WHERE table_schema = ? and table_name = ?`, [this.dbName, toCamel(name)]) as any[]
+    const connection = await this.connectionPool.getConnection()
+    const [rows] = await connection.query(`select count(*) as \`Exists\` from information_schema.tables WHERE table_schema = ? and table_name = ?`, [this.dbName, toCamel(name)]) as any[]
+    connection.release()
     return rows[0].Exists > 0
   }
 
   public async getTableDefinition(name: string): Promise<ITableDefinition | null> {
+    const connection = await this.connectionPool.getConnection()
     try {
       let tableDef = this.tableDefinitions.get(name)
       if (!tableDef) {
-        const [rows] = await this.connection.query(`show create table \`${this.dbName}\`.\`${name}\``) as any[]
+        const [rows] = await connection.query(`show create table \`${this.dbName}\`.\`${name}\``) as any[]
         const txt = (rows[0]['Create Table'] as string)
         let lines = txt.split('\n')
         lines.shift()
@@ -57,14 +63,17 @@ export class SchemaSync {
             output.dataLength1 = null
             output.dataType = 'boolean'
           }
+          connection.release()
           return output
         })
         tableDef = { name, fields }
         this.tableDefinitions.set(name, tableDef)
       }
+      connection.release()
       return tableDef
     } catch (e: any) {
       console.error(e?.sqlMessage ?? e.toString())
+      connection.release()
       return null
     }
   }
@@ -129,14 +138,16 @@ export class SchemaSync {
           tableDef.fields.push(f)
         })
 
+        const connection = await this.connectionPool.getConnection()
         for (const q of queries) {
           try {
-            await this.connection.query(q)
+            await connection.query(q)
           } catch (e) {
             console.error(e)
             console.error(q)
           }
         }
+        connection.release()
 
       } else { // create new table
 
@@ -157,13 +168,14 @@ export class SchemaSync {
         }
 
         const tableDefinition = `create table \`${this.dbName}\`.\`${name}\` (${cols.join(', ')}, primary key (id)${uniqKey})`
-
+        const connection = await this.connectionPool.getConnection()
         try {
-          await this.connection.query(tableDefinition)
-          await this.connection.query(`insert into \`${this.dbName}\`.\`_entities\` (\`name\`) values (?)`, [toCamel(name)])
+          await connection.query(tableDefinition)
+          await connection.query(`insert into \`${this.dbName}\`.\`_entities\` (\`name\`) values (?)`, [toCamel(name)])
         } catch (e) {
           console.error(e)
         }
+        connection.release()
       }
     }
   }

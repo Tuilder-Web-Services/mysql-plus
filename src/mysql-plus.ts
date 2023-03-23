@@ -18,15 +18,13 @@ export interface IDbConnectOptions<TSessionContext> extends ConnectionOptions {
 
 export class MySQLPlus<TSessionContext = any> {
 
-  private get connection(): Promise<Connection> {
-    return this.pool.getConnection()
-  }
+  private getConnection = () => this.pool.getConnection()
 
   private pool: Pool
 
   public databaseName: string
 
-  private sync: Promise<SchemaSync>
+  private sync: SchemaSync
 
   public eventStream = new Subject<IDbEvent>()
 
@@ -42,16 +40,11 @@ export class MySQLPlus<TSessionContext = any> {
       enableKeepAlive: true,
     })
     this.databaseName = options.database
-    this.sync = new Promise<SchemaSync>(resolve => {
-      this.connection.then(async connection => {
-        const sync = new SchemaSync(connection, this.databaseName, options.schemaKeys)
-        if (!await sync.checkSchema(options.failOnMissingDb)) {
-          await this.destroy()
-          throw new Error(`Database ${this.databaseName} does not exist`)
-        }
-        resolve(sync)
-      })
-    })
+    this.sync = new SchemaSync(this.pool, this.databaseName, options.schemaKeys)
+    if (!this.sync.checkSchema(options.failOnMissingDb)) {
+      this.destroy()
+      throw new Error(`Database ${this.databaseName} does not exist`)
+    }
 
     const auditTrailEnabled = options.auditTrailEnabled ?? true
     const auditTrailSkipTables = new Set(options.auditTrailSkipTables ?? [])
@@ -81,20 +74,13 @@ export class MySQLPlus<TSessionContext = any> {
     this.getConnection().then(async connection => {
       const [rows] = await connection.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`);
       if (rows.length) {
-        const entities = await this.read<{ name: string }[]>({default: new Set([EDbOperations.Read])}, '_entities')
+        const entities = await this.read<{ name: string }[]>({ default: new Set([EDbOperations.Read]) }, '_entities')
         entities?.forEach(e => this.entities.add(e.name))
       } else {
         await connection.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
       }
+      connection.release()
     })
-  }
-
-  public getConnection = async () => {
-    return await this.connection
-  }
-
-  public checkConnectionState = async () => {
-    const connection = await this.connection
   }
 
   private checkPermissions(
@@ -106,7 +92,7 @@ export class MySQLPlus<TSessionContext = any> {
   ) {
     table = toSnake(table)
     fields = fields?.map(f => toSnake(f)) ?? []
-    const operationName = EDbOperations[operation]    
+    const operationName = EDbOperations[operation]
 
     let hasProtectedField = fields.some(f => permissions.tables?.[table]?.protectedFields?.has(f))
 
@@ -131,19 +117,26 @@ export class MySQLPlus<TSessionContext = any> {
   }
 
   public async tableExists(table: string): Promise<boolean> {
-    return (await this.sync).tableExists(table)
+    return this.sync.tableExists(table)
   }
 
   public async read<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
     const tableName = toSnake(table)
-    const tableDef = await (await this.sync).getTableDefinition(tableName)
+    const tableDef = await this.sync.getTableDefinition(tableName)
     const columns: string[] = (params?.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
     params = params ?? {}
     if (permissions.qualifiers) {
       params.where = Object.assign((params.where ?? {}), permissions.qualifiers)
     }
-     params.columns = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
-    return await dbRead<T>(await this.connection, this.databaseName, table, params, await this.sync)
+    params.columns = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
+    const connection = await this.getConnection()
+    try {
+      connection.release()
+      return await dbRead<T>(connection, this.databaseName, table, params, this.sync)
+    } catch (e) {
+      connection.release()
+      throw e
+    }
   }
 
   public async readFirst<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
@@ -161,32 +154,45 @@ export class MySQLPlus<TSessionContext = any> {
       Object.assign(params, permissions.qualifiers)
     }
     console.log(params)
-    const idsDeleted = await dbDeleteWhere(await this.connection, this.databaseName, table, params)
-    if (idsDeleted.length) {
-      this.eventStream.next({
-        type: ETableChangeType.Deleted,
-        table: toCamel(table),
-        data: idsDeleted,
-        database: this.databaseName,
-      })
+    const connection = await this.getConnection()
+    try {
+      const idsDeleted = await dbDeleteWhere(connection, this.databaseName, table, params)
+      if (idsDeleted.length) {
+        this.eventStream.next({
+          type: ETableChangeType.Deleted,
+          table: toCamel(table),
+          data: idsDeleted,
+          database: this.databaseName,
+        })
+      }
+      connection.release()
+    } catch (e) {
+      connection.release()
+      throw e
     }
   }
 
   public async query<T = any>(query: string, params?: any[]): Promise<T[]> {
-    const connection = await this.connection
-    const [rows] = await connection.query(query, params) as any[]
-    return rows
+    const connection = await this.getConnection()
+    try {
+      const [rows] = await connection.query(query, params) as any[]
+      connection.release()
+      return rows
+    } catch (e) {
+      connection.release()
+      throw e
+    }
   }
 
   public async write<T = any>(permissions: IDbPermissions, tableName: string, data: any, options: IDBWriteOptions<TSessionContext> = {}) {
 
     this.checkPermissions(permissions, EDbOperations.Write, tableName, Object.keys(data))
 
-    const syncService = await this.sync
+    const syncService = this.sync
 
     tableName = toSnake(tableName)
 
-    const db = await this.connection
+    const db = await this.getConnection()
     const addDefaults = this.options.defaults
     if (addDefaults !== undefined) {
       data = addDefaults(this.databaseName, toCamel(tableName), data, options.sessionContext)
@@ -214,38 +220,46 @@ export class MySQLPlus<TSessionContext = any> {
     try {
       await db.query(insertQuery, values)
       what = ETableChangeType.Inserted
+      db.release()
     } catch (e: any) {
-      const errorMessage = e.toString()
-      if (
-        errorMessage.toLowerCase().includes(`duplicate entry '`)
-      ) {
-        const updateData: Record<string, any> = {}
-        for (const key of Object.keys(data)) {
-          if (key !== 'id' && !key.startsWith('_')) {
-            updateData[key] = prepareData(data[key])
+      try {
+        const errorMessage = e.toString()
+        if (
+          errorMessage.toLowerCase().includes(`duplicate entry '`)
+        ) {
+          const updateData: Record<string, any> = {}
+          for (const key of Object.keys(data)) {
+            if (key !== 'id' && !key.startsWith('_')) {
+              updateData[key] = prepareData(data[key])
+            }
           }
-        }
-        const whereData: Record<string, any> = { id: data.id }
-        if (permissions.qualifiers) {
-          Object.assign(whereData, permissions.qualifiers)
-        }
-        const UpdateQuery = `
-          update ${tableNameSql} 
-          set ${Object.keys(updateData).map(k => `\`${toSnake(k)}\`=${data[k] === null ? 'NULL' : '?'}`).join(`,`)}
-          where ${Object.keys(whereData).map(k => `\`${toSnake(k)}\`=?`).join(` and `)}`
-        const values = Object.keys(updateData).filter(k => data[k] !== null).map(k => prepareData(data[k]))
-        values.push(...Object.keys(whereData).map(k => prepareData(whereData[k])))
-        try {
-          await db.query(UpdateQuery, values)
-          what = ETableChangeType.Updated
-        } catch (e: any) {
-          console.error('ERROR updating data')
+          const whereData: Record<string, any> = { id: data.id }
+          if (permissions.qualifiers) {
+            Object.assign(whereData, permissions.qualifiers)
+          }
+          const UpdateQuery = `
+            update ${tableNameSql} 
+            set ${Object.keys(updateData).map(k => `\`${toSnake(k)}\`=${data[k] === null ? 'NULL' : '?'}`).join(`,`)}
+            where ${Object.keys(whereData).map(k => `\`${toSnake(k)}\`=?`).join(` and `)}`
+          const values = Object.keys(updateData).filter(k => data[k] !== null).map(k => prepareData(data[k]))
+          values.push(...Object.keys(whereData).map(k => prepareData(whereData[k])))
+          try {
+            await db.query(UpdateQuery, values)
+            what = ETableChangeType.Updated
+          } catch (e: any) {
+            console.error('ERROR updating data')
+            console.error(e)
+          }
+        } else {
+          console.error('ERROR inserting data')
+          console.error(insertQuery, values)
           console.error(e)
         }
-      } else {
-        console.error('ERROR inserting data')
-        console.error(insertQuery, values)
-        console.error(e)
+        db.release()
+      }
+      catch (e2) {
+        db.release()
+        throw e2
       }
     }
     if (what !== null) {
@@ -262,9 +276,7 @@ export class MySQLPlus<TSessionContext = any> {
 
   public async destroy() {
     this.eventStream.complete();
-    const connection = await this.connection;
-    connection.end();
-    connection.destroy()
+    this.pool.end()
   }
 
 }
