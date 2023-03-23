@@ -28,7 +28,7 @@ db.eventStream.subscribe(e => {
 (async () => {
 
   const permissions: IDbPermissions = {
-    global: new Set([EDbOperations.Read, EDbOperations.Write, EDbOperations.Delete]),
+    default: new Set([EDbOperations.Read, EDbOperations.Write, EDbOperations.Delete]),
     // tables: {
     //   camp_people: { operations: new Set([EDbOperations.Read]) },
     //   sales: { operations: new Set([EDbOperations.Read]) },
@@ -52,6 +52,12 @@ db.eventStream.subscribe(e => {
   // Update some data
   await db.write(permissions, 'FooPerson', { id: 'abfui1y2fsbkj', age: 30 })
 
+  await db.write(permissions, '_session', { id: '29837uyaihlsdfo8i237tfyguaiwsjhkedfy987q23ityfugaswldf89762y3oiulhawsed9867ftoyguibhjk', age: 30 })
+
+  const session = await db.read(permissions, '_session', { where: { id: '29837uyaihlsdfo8i237tfyguaiwsjhkedfy987q23ityfugaswldf89762y3oiulhawsed9867ftoyguibhjk' } })
+
+  console.log(session);
+  
   // Delete some data
   // await db.delete(permissions, 'FooPerson', 'abfui1y2fsbkj')
 })()

@@ -37,7 +37,7 @@ db.eventStream.subscribe(e => {
 });
 
 const sessionPermissions: IDbPermissions = {
-  global: new Set([EDbOperations.Read]),
+  default: new Set([EDbOperations.Read]),
   tables: {
     person: {
       operations: new Set([EDbOperations.Write]),

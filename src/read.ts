@@ -44,6 +44,8 @@ export async function dbRead<T>(db: Connection, database: string, tableName: str
 
     const query = `select ${selectCols} from \`${database}\`.\`${tableName}\` ${whereCols}`
 
+    console.log(query, whereValues)    
+
     const [rows] = await db.query(query, whereValues) as any[]
 
     if (rows.length) {
@@ -55,8 +57,8 @@ export async function dbRead<T>(db: Connection, database: string, tableName: str
     }
 
   } catch (e: any) {
-    console.error(e)
     console.error('ERROR reading from database')
+    console.error(e)
   }
 
   return null
