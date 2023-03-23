@@ -130,6 +130,10 @@ export class MySQLPlus<TSessionContext = any> {
     return fields
   }
 
+  public async tableExists(table: string): Promise<boolean> {
+    return (await this.sync).tableExists(table)
+  }
+
   public async read<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
     const tableName = toSnake(table)
     const tableDef = await (await this.sync).getTableDefinition(tableName)

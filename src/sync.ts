@@ -26,6 +26,11 @@ export class SchemaSync {
     return true
   }
 
+  public async tableExists(name: string): Promise<boolean> {
+    const [rows] = await this.connection.query(`select count(*) as \`Exists\` from information_schema.tables WHERE table_schema = ? and table_name = ?`, [this.dbName, toCamel(name)]) as any[]
+    return rows[0].Exists > 0
+  }
+
   public async getTableDefinition(name: string): Promise<ITableDefinition | null> {
     try {
       let tableDef = this.tableDefinitions.get(name)
