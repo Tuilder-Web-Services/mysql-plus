@@ -1,4 +1,4 @@
-import { Connection, ConnectionOptions, createConnection } from "mysql2/promise";
+import { Connection, ConnectionOptions, createConnection, createPool, Pool } from "mysql2/promise";
 import { nanoid } from "nanoid";
 import { dbRead, IDBReadOptions } from "./read";
 import { toSnake, toCamel } from "./utils";
@@ -18,7 +18,11 @@ export interface IDbConnectOptions<TSessionContext> extends ConnectionOptions {
 
 export class MySQLPlus<TSessionContext = any> {
 
-  private connection: Promise<Connection>
+  private get connection(): Promise<Connection> {
+    return this.pool.getConnection()
+  }
+
+  private pool: Pool
 
   public databaseName: string
 
@@ -29,12 +33,13 @@ export class MySQLPlus<TSessionContext = any> {
   public entities = new Set<string>()
 
   constructor(private readonly options: IDbConnectOptions<TSessionContext>) {
-    this.connection = createConnection({
+    this.pool = createPool({
       host: options.host,
       user: options.user,
       password: options.password,
       port: options.port,
-      pool: options.pool      
+      pool: options.pool,
+      enableKeepAlive: true,
     })
     this.databaseName = options.database
     this.sync = new Promise<SchemaSync>(resolve => {
@@ -86,6 +91,10 @@ export class MySQLPlus<TSessionContext = any> {
 
   public getConnection = async () => {
     return await this.connection
+  }
+
+  public checkConnectionState = async () => {
+    const connection = await this.connection
   }
 
   private checkPermissions(permissions: IDbPermissions, operation: EDbOperations, table: string, fields?: string[]) {

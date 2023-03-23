@@ -42,9 +42,7 @@ export async function dbRead<T>(db: Connection, database: string, tableName: str
 
     const whereCols = whereColumns.length > 0 ? ' where ' + whereColumns.map(c => '`' + c + '`=?').join(' and ') : ''
 
-    const query = `select ${selectCols} from \`${database}\`.\`${tableName}\` ${whereCols}`
-
-    console.log(query, whereValues)    
+    const query = `select ${selectCols} from \`${database}\`.\`${tableName}\` ${whereCols}`    
 
     const [rows] = await db.query(query, whereValues) as any[]
 
