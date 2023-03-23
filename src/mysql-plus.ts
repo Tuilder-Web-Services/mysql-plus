@@ -135,6 +135,9 @@ export class MySQLPlus<TSessionContext = any> {
     const tableDef = await (await this.sync).getTableDefinition(tableName)
     const columns: string[] = (params?.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
     params = params ?? {}
+    if (permissions.qualifiers) {
+      params.where = Object.assign((params.where ?? {}), permissions.qualifiers)
+    }
      params.columns = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
     return await dbRead<T>(await this.connection, this.databaseName, table, params, await this.sync)
   }
