@@ -22,7 +22,6 @@ export async function dbDeleteWhere(db: Connection, database: string, table: str
   const values: (string | number)[] = []
   const whereStatements: string[] = []
   for (const [key, value] of Object.entries(params)) {
-    console.log(key, value)    
     if (Array.isArray(value)) {
       whereStatements.push(`\`${key}\` in (${value.map(v => {
         values.push(prepareData(v))
@@ -37,9 +36,7 @@ export async function dbDeleteWhere(db: Connection, database: string, table: str
   try {
     const [rows] = await db.query(query, values) as any[]
     const ids = rows.map((r: { id: string }) => r.id)
-    if (!ids.length) {
-      console.log('No ids found for deleteWhere')
-      console.log(query, values)            
+    if (!ids.length) {         
       return []
     }
     return await dbDelete(db, database, table, ids)

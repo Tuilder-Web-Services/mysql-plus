@@ -153,7 +153,6 @@ export class MySQLPlus<TSessionContext = any> {
     if (permissions.qualifiers) {
       Object.assign(params, permissions.qualifiers)
     }
-    console.log(params)
     const connection = await this.getConnection()
     try {
       const idsDeleted = await dbDeleteWhere(connection, this.databaseName, table, params)
