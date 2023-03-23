@@ -1,6 +1,6 @@
 {
   "name": "@tuilder/mysql-plus",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "description": "Automatically manages your MYSQL db schema, based on native javascript objects",
   "typings": "./lib/index.d.ts",
   "module": "./lib/index.mjs",
