@@ -97,12 +97,23 @@ export class MySQLPlus<TSessionContext = any> {
     const connection = await this.connection
   }
 
-  private checkPermissions(permissions: IDbPermissions, operation: EDbOperations, table: string, fields?: string[]) {
+  private checkPermissions(
+    permissions: IDbPermissions,
+    operation: EDbOperations,
+    table: string,
+    fields?: string[],
+    removeProtectedFields = false
+  ) {
     table = toSnake(table)
     fields = fields?.map(f => toSnake(f)) ?? []
     const operationName = EDbOperations[operation]    
 
-    const hasProtectedField = fields.some(f => permissions.tables?.[table]?.protectedFields?.has(f))
+    let hasProtectedField = fields.some(f => permissions.tables?.[table]?.protectedFields?.has(f))
+
+    if (hasProtectedField && removeProtectedFields) {
+      fields = fields.filter(f => !permissions.tables?.[table]?.protectedFields?.has(f))
+      hasProtectedField = false
+    }
 
     let allowed = false
 
@@ -115,6 +126,8 @@ export class MySQLPlus<TSessionContext = any> {
     if (!allowed) {
       throw new Error(`Permission denied: ${operationName} on ${table}`)
     }
+
+    return fields
   }
 
   public async read<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
@@ -122,8 +135,7 @@ export class MySQLPlus<TSessionContext = any> {
     const tableDef = await (await this.sync).getTableDefinition(tableName)
     const columns: string[] = (params?.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
     params = params ?? {}
-    params.columns = columns
-    this.checkPermissions(permissions, EDbOperations.Read, table, columns)
+     params.columns = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
     return await dbRead<T>(await this.connection, this.databaseName, table, params, await this.sync)
   }
 
@@ -170,7 +182,7 @@ export class MySQLPlus<TSessionContext = any> {
     const db = await this.connection
     const addDefaults = this.options.defaults
     if (addDefaults !== undefined) {
-      data = addDefaults(this.databaseName, toCamel(tableName), data)
+      data = addDefaults(this.databaseName, toCamel(tableName), data, options.sessionContext)
     }
     if (!data.id) {
       data.id = nanoid()
