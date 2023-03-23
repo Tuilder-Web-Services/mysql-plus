@@ -19,3 +19,5 @@ export const schemaChain = (...Chain: (TSchemaChain | undefined)[]) => {
   }, [])
   return `\`${chain.map(s => sanitiseSchemaName(s!)).join('`.`')}\``
 }
+
+export const stringify = (obj: any) => JSON.stringify(obj, (_key, value) => (value instanceof Set ? [...value] : value))

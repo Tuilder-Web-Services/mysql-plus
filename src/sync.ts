@@ -1,5 +1,5 @@
 import { Connection } from 'mysql2/promise'
-import { toCamel, toSnake } from './utils'
+import { stringify, toCamel, toSnake } from './utils'
 
 export class SchemaSync {
 
@@ -240,7 +240,7 @@ export const prepareData = (data: any): any => {
     case 'boolean':
       return data ? 1 : 0
     default:
-      return JSON.stringify(data, (_key, value) => (value instanceof Set ? [...value] : value))
+      return stringify(data)
   }
 }
 

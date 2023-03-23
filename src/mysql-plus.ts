@@ -1,7 +1,7 @@
 import { Connection, ConnectionOptions, createConnection, createPool, Pool } from "mysql2/promise";
 import { nanoid } from "nanoid";
 import { dbRead, IDBReadOptions } from "./read";
-import { toSnake, toCamel } from "./utils";
+import { toSnake, toCamel, stringify } from "./utils";
 import { IKey, prepareData, SchemaSync } from "./sync";
 import { EDbOperations, ETableChangeType } from "./enums";
 import { Subject } from "rxjs";
@@ -72,7 +72,7 @@ export class MySQLPlus<TSessionContext = any> {
         this.write(permissions, 'audit_trail', {
           table_name: e.table,
           operation: ETableChangeType[e.type],
-          data: JSON.stringify(e.data, (_key, value) => (value instanceof Set ? [...value] : value))
+          data: stringify(e.data)
         })
       })
     }
@@ -100,7 +100,7 @@ export class MySQLPlus<TSessionContext = any> {
   private checkPermissions(permissions: IDbPermissions, operation: EDbOperations, table: string, fields?: string[]) {
     table = toSnake(table)
     fields = fields?.map(f => toSnake(f)) ?? []
-    const operationName = EDbOperations[operation]
+    const operationName = EDbOperations[operation]    
 
     const hasProtectedField = fields.some(f => permissions.tables?.[table]?.protectedFields?.has(f))
 
