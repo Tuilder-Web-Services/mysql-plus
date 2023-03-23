@@ -23,6 +23,7 @@
   ],
   "scripts": {
     "build": "tsup",
+    "pub": "npm run build && npm publish --access public",
     "watch": "npm run build -- --watch src",
     "test": "nodemon ./tests/index.ts",
     "prepack": "npm run build"
