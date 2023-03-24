@@ -1,8 +1,8 @@
-import { Connection } from "mysql2/promise"
+import { Pool } from "mysql2/promise"
 import { toSnake } from "./utils"
 import { prepareData } from "./sync"
 
-export async function dbDelete(db: Connection, database: string, table: string, ids: string | string[]): Promise<string[]> {
+export async function dbDelete(db: Pool, database: string, table: string, ids: string | string[]): Promise<string[]> {
   ids = typeof ids === 'string' ? [ids] : ids
   if (!ids.length || !ids) return []
   const query = `delete from \`${database}\`.\`${toSnake(table)}\` where id in (${ids.map(_ => '?').join(', ')})`
@@ -17,7 +17,7 @@ export async function dbDelete(db: Connection, database: string, table: string, 
   }
 }
 
-export async function dbDeleteWhere(db: Connection, database: string, table: string, params: Record<string, any>): Promise<string[]> {
+export async function dbDeleteWhere(db: Pool, database: string, table: string, params: Record<string, any>): Promise<string[]> {
   if (!Object.keys(params).length) return []
   const values: (string | number)[] = []
   const whereStatements: string[] = []

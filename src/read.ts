@@ -1,4 +1,4 @@
-import { Connection } from "mysql2/promise"
+import { Pool } from "mysql2/promise"
 import { SchemaSync } from "./sync"
 import { toCamel, toSnake } from "./utils"
 
@@ -11,7 +11,7 @@ export interface IDBReadOptions {
   skipAppendAccount?: boolean,
 }
 
-export async function dbRead<T>(db: Connection, database: string, tableName: string, options: IDBReadOptions = {}, syncService: SchemaSync): Promise<null | T> {
+export async function dbRead<T>(db: Pool, database: string, tableName: string, options: IDBReadOptions = {}, syncService: SchemaSync): Promise<null | T> {
 
   tableName = toSnake(tableName)
   const tableDef = await syncService.getTableDefinition(tableName)

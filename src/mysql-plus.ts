@@ -1,4 +1,4 @@
-import { Connection, ConnectionOptions, createConnection, createPool, Pool } from "mysql2/promise";
+import { ConnectionOptions, createPool, Pool } from "mysql2/promise";
 import { nanoid } from "nanoid";
 import { dbRead, IDBReadOptions } from "./read";
 import { toSnake, toCamel, stringify } from "./utils";
@@ -17,8 +17,6 @@ export interface IDbConnectOptions<TSessionContext> extends ConnectionOptions {
 }
 
 export class MySQLPlus<TSessionContext = any> {
-
-  private getConnection = () => this.pool.getConnection()
 
   private pool: Pool
 
@@ -71,16 +69,15 @@ export class MySQLPlus<TSessionContext = any> {
     }
 
     // Entities
-    this.getConnection().then(async connection => {
-      const [rows] = await connection.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`);
+    ;(async () => {
+      const [rows] = await this.pool.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`);
       if (rows.length) {
         const entities = await this.read<{ name: string }[]>({ default: new Set([EDbOperations.Read]) }, '_entities')
         entities?.forEach(e => this.entities.add(e.name))
       } else {
-        await connection.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
+        await this.pool.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
       }
-      connection.release()
-    })
+    })()
   }
 
   private checkPermissions(
@@ -129,14 +126,7 @@ export class MySQLPlus<TSessionContext = any> {
       params.where = Object.assign((params.where ?? {}), permissions.qualifiers)
     }
     params.columns = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
-    const connection = await this.getConnection()
-    try {
-      connection.release()
-      return await dbRead<T>(connection, this.databaseName, table, params, this.sync)
-    } catch (e) {
-      connection.release()
-      throw e
-    }
+    return await dbRead<T>(this.pool, this.databaseName, table, params, this.sync)
   }
 
   public async readFirst<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
@@ -153,34 +143,20 @@ export class MySQLPlus<TSessionContext = any> {
     if (permissions.qualifiers) {
       Object.assign(params, permissions.qualifiers)
     }
-    const connection = await this.getConnection()
-    try {
-      const idsDeleted = await dbDeleteWhere(connection, this.databaseName, table, params)
-      if (idsDeleted.length) {
-        this.eventStream.next({
-          type: ETableChangeType.Deleted,
-          table: toCamel(table),
-          data: idsDeleted,
-          database: this.databaseName,
-        })
-      }
-      connection.release()
-    } catch (e) {
-      connection.release()
-      throw e
+    const idsDeleted = await dbDeleteWhere(this.pool, this.databaseName, table, params)
+    if (idsDeleted.length) {
+      this.eventStream.next({
+        type: ETableChangeType.Deleted,
+        table: toCamel(table),
+        data: idsDeleted,
+        database: this.databaseName,
+      })
     }
   }
 
   public async query<T = any>(query: string, params?: any[]): Promise<T[]> {
-    const connection = await this.getConnection()
-    try {
-      const [rows] = await connection.query(query, params) as any[]
-      connection.release()
-      return rows
-    } catch (e) {
-      connection.release()
-      throw e
-    }
+    const [rows] = await this.pool.query(query, params) as any[]
+    return rows
   }
 
   public async write<T = any>(permissions: IDbPermissions, tableName: string, data: any, options: IDBWriteOptions<TSessionContext> = {}) {
@@ -191,7 +167,6 @@ export class MySQLPlus<TSessionContext = any> {
 
     tableName = toSnake(tableName)
 
-    const db = await this.getConnection()
     const addDefaults = this.options.defaults
     if (addDefaults !== undefined) {
       data = addDefaults(this.databaseName, toCamel(tableName), data, options.sessionContext)
@@ -217,48 +192,40 @@ export class MySQLPlus<TSessionContext = any> {
       }
     }
     try {
-      await db.query(insertQuery, values)
+      await this.pool.query(insertQuery, values)
       what = ETableChangeType.Inserted
-      db.release()
     } catch (e: any) {
-      try {
-        const errorMessage = e.toString()
-        if (
-          errorMessage.toLowerCase().includes(`duplicate entry '`)
-        ) {
-          const updateData: Record<string, any> = {}
-          for (const key of Object.keys(data)) {
-            if (key !== 'id' && !key.startsWith('_')) {
-              updateData[key] = prepareData(data[key])
-            }
+      const errorMessage = e.toString()
+      if (
+        errorMessage.toLowerCase().includes(`duplicate entry '`)
+      ) {
+        const updateData: Record<string, any> = {}
+        for (const key of Object.keys(data)) {
+          if (key !== 'id' && !key.startsWith('_')) {
+            updateData[key] = prepareData(data[key])
           }
-          const whereData: Record<string, any> = { id: data.id }
-          if (permissions.qualifiers) {
-            Object.assign(whereData, permissions.qualifiers)
-          }
-          const UpdateQuery = `
-            update ${tableNameSql} 
-            set ${Object.keys(updateData).map(k => `\`${toSnake(k)}\`=${data[k] === null ? 'NULL' : '?'}`).join(`,`)}
-            where ${Object.keys(whereData).map(k => `\`${toSnake(k)}\`=?`).join(` and `)}`
-          const values = Object.keys(updateData).filter(k => data[k] !== null).map(k => prepareData(data[k]))
-          values.push(...Object.keys(whereData).map(k => prepareData(whereData[k])))
-          try {
-            await db.query(UpdateQuery, values)
-            what = ETableChangeType.Updated
-          } catch (e: any) {
-            console.error('ERROR updating data')
-            console.error(e)
-          }
-        } else {
-          console.error('ERROR inserting data')
-          console.error(insertQuery, values)
+        }
+        const whereData: Record<string, any> = { id: data.id }
+        if (permissions.qualifiers) {
+          Object.assign(whereData, permissions.qualifiers)
+        }
+        const UpdateQuery = `
+          update ${tableNameSql} 
+          set ${Object.keys(updateData).map(k => `\`${toSnake(k)}\`=${data[k] === null ? 'NULL' : '?'}`).join(`,`)}
+          where ${Object.keys(whereData).map(k => `\`${toSnake(k)}\`=?`).join(` and `)}`
+        const values = Object.keys(updateData).filter(k => data[k] !== null).map(k => prepareData(data[k]))
+        values.push(...Object.keys(whereData).map(k => prepareData(whereData[k])))
+        try {
+          await this.pool.query(UpdateQuery, values)
+          what = ETableChangeType.Updated
+        } catch (e: any) {
+          console.error('ERROR updating data')
           console.error(e)
         }
-        db.release()
-      }
-      catch (e2) {
-        db.release()
-        throw e2
+      } else {
+        console.error('ERROR inserting data')
+        console.error(insertQuery, values)
+        console.error(e)
       }
     }
     if (what !== null) {
