@@ -1,4 +1,4 @@
-import { ConnectionOptions, createPool, Pool } from "mysql2/promise";
+import { PoolOptions, createPool, Pool } from "mysql2/promise";
 import { nanoid } from "nanoid";
 import { dbRead, IDBReadOptions } from "./read";
 import { toSnake, toCamel, stringify } from "./utils";
@@ -7,7 +7,7 @@ import { EDbOperations, ETableChangeType } from "./enums";
 import { Subject } from "rxjs";
 import { dbDeleteWhere } from "./delete";
 
-export interface IDbConnectOptions<TSessionContext> extends ConnectionOptions {
+export interface IDbConnectOptions<TSessionContext> extends PoolOptions {
   database: string
   schemaKeys?: Record<string, IKey[]>,
   defaults?: (schema: string, table: string, data: Record<any, any>, sessionContext?: TSessionContext) => Record<any, any>,
@@ -35,7 +35,8 @@ export class MySQLPlus<TSessionContext = any> {
       password: options.password,
       port: options.port,
       pool: options.pool,
-      enableKeepAlive: true,
+      enableKeepAlive: options.enableKeepAlive,
+      keepAliveInitialDelay: options.keepAliveInitialDelay
     })
     this.databaseName = options.database
     this.sync = new SchemaSync(this.pool, this.databaseName, options.schemaKeys)
