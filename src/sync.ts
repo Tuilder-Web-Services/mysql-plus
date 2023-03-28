@@ -248,7 +248,7 @@ export const prepareData = (data: any): any => {
   }
 }
 
-interface IFieldDefinition {
+export interface IFieldDefinition {
   field: string
   dataType: string
   dataLength1: number | null
@@ -256,7 +256,7 @@ interface IFieldDefinition {
   fullDefinition: string
 }
 
-interface ITableDefinition {
+export interface ITableDefinition {
   name: string
   fields: IFieldDefinition[]
 }

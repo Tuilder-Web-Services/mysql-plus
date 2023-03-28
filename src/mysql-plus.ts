@@ -114,7 +114,11 @@ export class MySQLPlus<TSessionContext = any> {
     return fields
   }
 
-  public async tableExists(table: string): Promise<boolean> {
+  public getEntityDefinition(entity: string) {
+    return this.sync.getTableDefinition(toSnake(entity))
+  }
+
+  public tableExists(table: string): Promise<boolean> {
     return this.sync.tableExists(table)
   }
 
