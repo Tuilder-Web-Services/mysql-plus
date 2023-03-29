@@ -114,8 +114,18 @@ export class MySQLPlus<TSessionContext = any> {
     return fields
   }
 
-  public getEntityDefinition(entity: string) {
-    return this.sync.getTableDefinition(toSnake(entity))
+  public async getEntityDefinition(entity: string) {
+    const def = await this.sync.getTableDefinition(toSnake(entity))
+    if (def) {
+      const fields = def.fields.map(f => ({
+        name: toCamel(f.field),
+        type: f.dataType
+      })).filter(f => f.type !== 'KEY' && !f.name.startsWith('_'))
+      return {
+        name: toCamel(def.name),
+        fields
+      }
+    }
   }
 
   public tableExists(table: string): Promise<boolean> {
