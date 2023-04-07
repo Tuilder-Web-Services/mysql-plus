@@ -27,7 +27,7 @@ export class SchemaSync {
   }
 
   public async tableExists(name: string): Promise<boolean> {
-    const [rows] = await this.db.query(`select count(*) as \`Exists\` from information_schema.tables WHERE table_schema = ? and table_name = ?`, [this.dbName, toCamel(name)]) as any[]
+    const [rows] = await this.db.query(`select count(*) as \`Exists\` from information_schema.tables WHERE table_schema = ? and table_name = ?`, [this.dbName, toSnake(name)]) as any[]
     return rows[0].Exists > 0
   }
 
