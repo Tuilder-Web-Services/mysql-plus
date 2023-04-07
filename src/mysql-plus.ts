@@ -191,7 +191,7 @@ export class MySQLPlus<TSessionContext = any> {
       // data.id = Math.random().toString(36).substring(2, 9)
     }
     Object.keys(data).forEach(k => {
-      if (['created_at', 'last_modified_at'].includes(k.toLowerCase())) {
+      if (['created_at', 'last_modified_at'].includes(toSnake(k).toLowerCase())) {
         delete (data[k])
       }
     })
