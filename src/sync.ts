@@ -5,7 +5,7 @@ export class SchemaSync {
 
   private tableDefinitions = new Map<string, ITableDefinition>()
 
-  constructor(private db: Pool, private dbName: string, private schemaKeys?: Record<string, IKey[]>) {}
+  constructor(private db: Pool, private dbName: string, private schemaKeys?: Record<string, IKey[]>) { }
 
   public async checkSchema(failOnMissingDb = false): Promise<boolean> {
     const { dbName } = this
@@ -82,7 +82,7 @@ export class SchemaSync {
         const field = this.getDataType(v, newFieldName, existingFieldDef)
         newTable.fields.push(field)
         const fieldDef = `\`${newFieldName}\` ${field.fullDefinition}`
-        if (newFieldName=== 'id') cols.unshift(fieldDef)
+        if (newFieldName === 'id') cols.unshift(fieldDef)
         else cols.push(fieldDef)
       })
 
@@ -144,7 +144,7 @@ export class SchemaSync {
         let uniqKeyCount = 0
         // Add unique keys
         if (this.schemaKeys && this.schemaKeys[name]) {
-          const keys     = this.schemaKeys[name]
+          const keys = this.schemaKeys[name]
           const dataKeys = new Set<string>(Object.keys(data).map(k => toSnake(k)))
           for (const key of keys) {
             if (key.type === EKeyTypes.Unique) {
@@ -167,7 +167,7 @@ export class SchemaSync {
     }
   }
 
-  private getDataType(data: any, fieldName: string, existingFieldDef: IFieldDefinition | null): IFieldDefinition {  
+  private getDataType(data: any, fieldName: string, existingFieldDef: IFieldDefinition | null): IFieldDefinition {
     const finalData = prepareData(data)
     let definition = ''
     let output: IFieldDefinition = {
@@ -177,12 +177,15 @@ export class SchemaSync {
       dataLength2: null,
       dataLength1: null,
     }
-    
+
     const textCharSet = 'character set utf8mb4 collate utf8mb4_general_ci'
     if (finalData instanceof Date) {
       definition = output.dataType = 'timestamp'
     } else {
       switch (typeof finalData) {
+        case 'boolean':
+          definition = output.dataType = 'boolean'
+          break
         case 'string':
           if (finalData.length < 5000) {
             output.dataLength1 = finalData.length
@@ -202,7 +205,7 @@ export class SchemaSync {
           }
           break
         case 'number':
-          if (typeof data === 'boolean' || (existingFieldDef?.dataType.toLowerCase() === 'boolean' && [0, 1].includes(data))) {
+          if ((existingFieldDef?.dataType.toLowerCase() === 'boolean' && [0, 1].includes(data))) {
             definition = output.dataType = 'boolean'
             break
           }
