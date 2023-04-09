@@ -49,7 +49,7 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
     if (rows.length) {
 
       const tableFieldsMap = tableDef?.fields.reduce((acc, f) => {
-        acc[f.field] = f
+        acc[toCamel(f.field)] = f
         return acc
       }, {} as Record<string, any>) ?? {}
 
