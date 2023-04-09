@@ -70,15 +70,16 @@ export class MySQLPlus<TSessionContext = any> {
     }
 
     // Entities
-    ;(async () => {
-      const [rows] = await this.pool.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`);
+    
+    this.pool.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`).then(async res => {
+      const [rows] = res
       if (rows.length) {
         const entities = await this.read<{ name: string }[]>({ default: new Set([EDbOperations.Read]) }, '_entities')
         entities?.forEach(e => this.entities.add(e.name))
       } else {
         await this.pool.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
       }
-    })()
+    })
   }
 
   private checkPermissions(
@@ -188,7 +189,6 @@ export class MySQLPlus<TSessionContext = any> {
     }
     if (!data.id) {
       data.id = nanoid()
-      // data.id = Math.random().toString(36).substring(2, 9)
     }
     Object.keys(data).forEach(k => {
       if (['created_at', 'last_modified_at'].includes(toSnake(k).toLowerCase())) {

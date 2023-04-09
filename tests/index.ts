@@ -39,25 +39,14 @@ db.eventStream.subscribe(e => {
     }
   }
 
-  // Get a connection
-  await db.getConnection()
-
   // Write some data
-  await db.write(permissions, 'FooPerson', { id: 'abfui1y2fsbkj', name: 'Emmanuel Clive Higgins', age: 206487, favColor: 'red, yellow and black maybe' })
+  await db.write(permissions, 'FooPerson', { id: 'abfui1y2fsbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
 
   // Read some data
-  await db.read(permissions, 'FooPerson', { where: { id: 'abfui1y2fsbkj' } })
-  await db.read(permissions, 'FooPerson', { columns: ['id', 'name'] })
+  const person = await db.read(permissions, 'FooPerson', { where: { id: 'abfui1y2fsbkj' } })
 
-  // Update some data
-  await db.write(permissions, 'FooPerson', { id: 'abfui1y2fsbkj', age: 30 })
+  console.log(person);  
 
-  await db.write(permissions, '_session', { id: '29837uyaihlsdfo8i237tfyguaiwsjhkedfy987q23ityfugaswldf89762y3oiulhawsed9867ftoyguibhjk', age: 30 })
-
-  const session = await db.read(permissions, '_session', { where: { id: '29837uyaihlsdfo8i237tfyguaiwsjhkedfy987q23ityfugaswldf89762y3oiulhawsed9867ftoyguibhjk' } })
-
-  console.log(session);
-  
   // Delete some data
   // await db.delete(permissions, 'FooPerson', 'abfui1y2fsbkj')
 })()

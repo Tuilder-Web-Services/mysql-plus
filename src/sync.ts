@@ -168,6 +168,7 @@ export class SchemaSync {
   }
 
   private getDataType(data: any, fieldName: string, existingFieldDef: IFieldDefinition | null): IFieldDefinition {
+    const initialType = typeof data
     const finalData = prepareData(data)
     let definition = ''
     let output: IFieldDefinition = {
@@ -183,9 +184,6 @@ export class SchemaSync {
       definition = output.dataType = 'timestamp'
     } else {
       switch (typeof finalData) {
-        case 'boolean':
-          definition = output.dataType = 'boolean'
-          break
         case 'string':
           if (finalData.length < 5000) {
             output.dataLength1 = finalData.length
@@ -205,7 +203,7 @@ export class SchemaSync {
           }
           break
         case 'number':
-          if ((existingFieldDef?.dataType.toLowerCase() === 'boolean' && [0, 1].includes(data))) {
+          if (initialType === 'boolean' || (existingFieldDef?.dataType.toLowerCase() === 'boolean' && [0, 1].includes(data))) {
             definition = output.dataType = 'boolean'
             break
           }

@@ -46,7 +46,7 @@
   },
   "peerDependencies": {
     "mysql2": "^3.2.0",
-    "nanoid": "^4.0.1",
+    "nanoid": "^3.3.6",
     "rxjs": "^7.8.0"
   }
 }
