@@ -48,7 +48,7 @@ export class SchemaSync {
           let dataLengthMatch = bits[1].match(/\(([0-9]+)\,?([0-9]+)?\)/)
           const output = {
             field: bits[0],
-            dataType: bits[1].split('(')[0],
+            dataType: bits[1].split('(')[0] as TDataTypes,
             dataLength1: dataLengthMatch ? parseInt(dataLengthMatch[1], 10) || null : null,
             dataLength2: dataLengthMatch ? parseInt(dataLengthMatch[2], 10) || null : null,
             fullDefinition: ''
@@ -253,11 +253,13 @@ export const prepareData = (data: any): any => {
 
 export interface IFieldDefinition {
   field: string
-  dataType: string
+  dataType: TDataTypes
   dataLength1: number | null
   dataLength2: number | null
   fullDefinition: string
 }
+
+export type TDataTypes = 'boolean' | 'timestamp' | 'boolean' | 'varchar' | 'text' | 'mediumtext' | 'longtext' | 'boolean' | 'decimal' | 'smallint' | 'mediumint' | 'int' | 'bigint' | 'KEY' | ''
 
 export interface ITableDefinition {
   name: string
