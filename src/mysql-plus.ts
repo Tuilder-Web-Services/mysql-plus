@@ -136,7 +136,9 @@ export class MySQLPlus<TSessionContext = any> {
   public async read<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
     const tableName = toSnake(table)
     const tableDef = await this.sync.getTableDefinition(tableName)
-    const columns: string[] = (params?.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
+    const columns: string[] = 
+      (params?.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c))
+        : tableDef?.fields.filter(f => f.dataType !== 'KEY' && !new Set(['PRIMARY', 'KEY', 'CONSTRAINT']).has(f.field)).map(f => f.field) ?? [])
     params = params ?? {}
     if (permissions.qualifiers) {
       params.where = Object.assign((params.where ?? {}), permissions.qualifiers)
