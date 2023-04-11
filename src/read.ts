@@ -4,7 +4,7 @@ import { toCamel, toSnake } from "./utils"
 
 export interface IDBReadOptions {
   id?: string,
-  columns?: string | string[],
+  select?: string | string[],
   where?: Record<string, any>,
   return?: string,
   firstOnly?: boolean,
@@ -15,7 +15,7 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
 
   tableName = toSnake(tableName)
   const tableDef = await syncService.getTableDefinition(tableName)
-  const columns: string[] = (options.columns ? (typeof options.columns === 'string' ? [options.columns] : [...options.columns] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
+  const columns: string[] = (options.select ? (typeof options.select === 'string' ? [options.select] : [...options.select] ?? []).map(c => toSnake(c)) : tableDef?.fields.filter(f => f.dataType !== 'KEY').map(f => f.field) ?? [])
   const whereValues: any[]     = []
   const whereColumns: string[] = []
 

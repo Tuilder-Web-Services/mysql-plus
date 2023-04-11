@@ -137,13 +137,13 @@ export class MySQLPlus<TSessionContext = any> {
     const tableName = toSnake(table)
     const tableDef = await this.sync.getTableDefinition(tableName)
     const columns: string[] = 
-      (params?.columns ? (typeof params.columns === 'string' ? [params.columns] : [...params.columns] ?? []).map(c => toSnake(c))
+      (params?.select ? (typeof params.select === 'string' ? [params.select] : [...params.select] ?? []).map(c => toSnake(c))
         : tableDef?.fields.filter(f => f.dataType !== 'KEY' && !new Set(['PRIMARY', 'KEY', 'CONSTRAINT']).has(f.field)).map(f => f.field) ?? [])
     params = params ?? {}
     if (permissions.qualifiers) {
       params.where = Object.assign((params.where ?? {}), permissions.qualifiers)
     }
-    params.columns = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
+    params.select = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
     return await dbRead<T>(this.pool, this.databaseName, table, params, this.sync)
   }
 
