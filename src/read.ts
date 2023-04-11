@@ -30,6 +30,7 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
     columns.push('id')
     whereValues.push(options.id)
     whereColumns.push('id')
+    options.firstOnly = true
   }
 
   try {
