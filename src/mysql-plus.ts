@@ -1,11 +1,11 @@
-import { PoolOptions, createPool, Pool } from "mysql2/promise";
-import { nanoid } from "nanoid";
-import { dbRead, IDBReadOptions } from "./read";
-import { toSnake, toCamel, stringify } from "./utils";
-import { IKey, prepareData, SchemaSync } from "./sync";
-import { EDbOperations, ETableChangeType } from "./enums";
-import { Subject } from "rxjs";
-import { dbDeleteWhere } from "./delete";
+import { PoolOptions, createPool, Pool } from "mysql2/promise"
+import { nanoid } from "nanoid"
+import { dbRead, IDBReadOptions } from "./read"
+import { toSnake, toCamel, stringify } from "./utils"
+import { IKey, prepareData, SchemaSync } from "./sync"
+import { EDbOperations, ETableChangeType } from "./enums"
+import { Subject } from "rxjs"
+import { dbDeleteWhere } from "./delete"
 
 export interface IDbConnectOptions<TSessionContext> extends PoolOptions {
   database: string
@@ -39,46 +39,50 @@ export class MySQLPlus<TSessionContext = any> {
       keepAliveInitialDelay: options.keepAliveInitialDelay
     })
     this.databaseName = options.database
+
     this.sync = new SchemaSync(this.pool, this.databaseName, options.schemaKeys)
-    if (!this.sync.checkSchema(options.failOnMissingDb)) {
-      this.destroy()
-      throw new Error(`Database ${this.databaseName} does not exist`)
-    }
 
-    const auditTrailEnabled = options.auditTrailEnabled ?? true
-    const auditTrailSkipTables = new Set(options.auditTrailSkipTables ?? [])
-    auditTrailSkipTables.add('auditTrail')
+    this.sync.checkSchema(options.failOnMissingDb).then(success => {
+      if (!success) {
+        this.destroy()
+        throw new Error(`Database ${this.databaseName} does not exist`)
+      }
 
-    if (auditTrailEnabled) {
-      const permissions = {
-        tables: {
-          audit_trail: {
-            operations: new Set([EDbOperations.Write])
+      const auditTrailEnabled = options.auditTrailEnabled ?? true
+      const auditTrailSkipTables = new Set(options.auditTrailSkipTables ?? [])
+      auditTrailSkipTables.add('auditTrail')
+
+      if (auditTrailEnabled) {
+        const permissions = {
+          tables: {
+            audit_trail: {
+              operations: new Set([EDbOperations.Write])
+            }
           }
         }
-      }
-      this.eventStream.subscribe(e => {
-        if (auditTrailSkipTables.has(e.table)) {
-          return
-        }
-        this.write(permissions, 'audit_trail', {
-          table_name: e.table,
-          operation: ETableChangeType[e.type],
-          data: stringify(e.data)
+        this.eventStream.subscribe(e => {
+          if (auditTrailSkipTables.has(e.table)) {
+            return
+          }
+          this.write(permissions, 'audit_trail', {
+            table_name: e.table,
+            operation: ETableChangeType[e.type],
+            data: stringify(e.data)
+          })
         })
-      })
-    }
-
-    // Entities
-    
-    this.pool.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`).then(async res => {
-      const [rows] = res
-      if (rows.length) {
-        const entities = await this.read<{ name: string }[]>({ default: new Set([EDbOperations.Read]) }, '_entities')
-        entities?.forEach(e => this.entities.add(e.name))
-      } else {
-        await this.pool.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
       }
+
+      // Entities
+
+      this.pool.query<any>(`select * from information_schema.tables where table_schema = '${this.databaseName}' and table_name = '_entities'`).then(async res => {
+        const [rows] = res
+        if (rows.length) {
+          const entities = await this.read<{ name: string }[]>({ default: new Set([EDbOperations.Read]) }, '_entities')
+          entities?.forEach(e => this.entities.add(e.name))
+        } else {
+          await this.pool.query(`create table \`${this.databaseName}\`._entities (name varchar(255) not null, primary key (name))`)
+        }
+      })
     })
   }
 
@@ -136,7 +140,7 @@ export class MySQLPlus<TSessionContext = any> {
   public async read<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
     const tableName = toSnake(table)
     const tableDef = await this.sync.getTableDefinition(tableName)
-    const columns: string[] = 
+    const columns: string[] =
       (params?.select ? (typeof params.select === 'string' ? [params.select] : [...params.select] ?? []).map(c => toSnake(c))
         : tableDef?.fields.filter(f => f.dataType !== 'KEY' && !new Set(['PRIMARY', 'KEY', 'CONSTRAINT']).has(f.field)).map(f => f.field) ?? [])
     params = params ?? {}
@@ -258,7 +262,7 @@ export class MySQLPlus<TSessionContext = any> {
   }
 
   public async destroy() {
-    this.eventStream.complete();
+    this.eventStream.complete()
     this.pool.end()
   }
 

@@ -21,6 +21,7 @@ export class SchemaSync {
         await this.db.query(`use \`${dbName}\``)
       } catch (e) {
         console.error(e)
+        return false
       }
     }
     return true
