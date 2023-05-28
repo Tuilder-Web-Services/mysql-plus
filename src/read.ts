@@ -20,16 +20,20 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
   const whereColumns: string[] = []
 
   if (options.where && Object.keys(options.where).length > 0) {
-    for (const key of Object.keys(options.where)) {
-      whereColumns.push(toSnake(key))
-      whereValues.push(options.where[key])
+    for (const [key, value] of Object.entries(options.where)) {
+      if (Array.isArray(value)) {
+        whereValues.push(...value)
+        whereColumns.push(`\`${key}\` in (${value.map(v => `?`).join(', ')})`)
+      }
+      whereColumns.push(`\`${key}\`=?`)
+      whereValues.push(value)
     }
   }
 
   if (options.id) {
     columns.push('id')
     whereValues.push(options.id)
-    whereColumns.push('id')
+    whereColumns.push('id=?')
     options.firstOnly = true
   }
 
@@ -41,7 +45,10 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
       return snake === camel ? snake : snake + '` as `' + camel
     }).join('`, `') + '`' : '*'
 
-    const whereCols = whereColumns.length > 0 ? ' where ' + whereColumns.map(c => '`' + c + '`=?').join(' and ') : ''
+    const whereCols = whereColumns.length > 0 ? ' where ' + whereColumns.join(' and ') : ''
+
+    // select * from table where field=?
+    // select * from table where field in (?, ?, ?, ?, ?, ?)
 
     const query = `select ${selectCols} from \`${database}\`.\`${tableName}\` ${whereCols}`    
 
