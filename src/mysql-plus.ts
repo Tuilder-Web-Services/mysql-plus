@@ -24,7 +24,7 @@ export class MySQLPlus<TSessionContext = any> {
 
   private sync: SchemaSync
 
-  public eventStream = new Subject<IDbEvent>()
+  public eventStream: Subject<IDbEvent> = new Subject<IDbEvent>()
 
   public entities = new Set<string>()
 
@@ -119,6 +119,12 @@ export class MySQLPlus<TSessionContext = any> {
     return fields
   }
 
+  public listenToDbChanges(permissions: IDbPermissions, tableName: string) {
+    // check permissions
+    // return observable
+    // this.eventStream.pipe(e => e.database)
+  }
+
   public async getEntityDefinition(entity: string) {
     const def = await this.sync.getTableDefinition(toSnake(entity))
     if (def) {
@@ -157,7 +163,9 @@ export class MySQLPlus<TSessionContext = any> {
 
   public async delete(permissions: IDbPermissions, table: string, id: string | string[]): Promise<void> {
     this.checkPermissions(permissions, EDbOperations.Delete, table)
-    await this.deleteWhere(permissions, table, { id })
+    if (await this.tableExists(table)) {
+      await this.deleteWhere(permissions, table, { id })
+    }
   }
 
   public async deleteWhere(permissions: IDbPermissions, table: string, params: Record<string, any>): Promise<void> {
