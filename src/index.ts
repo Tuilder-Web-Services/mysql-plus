@@ -2,6 +2,11 @@ import { IDbConnectOptions, IDbEvent, IDbPermissions, IDBWriteOptions, MySQLPlus
 import { EDbOperations, ETableChangeType } from "./enums";
 import { IDBReadOptions } from './read';
 import { IFieldDefinition, ITableDefinition } from './sync';
+import { safeString, toPascal, toSnake, toKebab, toCamel, sanitiseSchemaName, schemaChain, stringify } from './utils'
+
+const MySQLPlusUtils = {
+  safeString, toPascal, toSnake, toKebab, toCamel, sanitiseSchemaName, schemaChain, stringify
+}
 
 export {
   IDbConnectOptions,
@@ -14,4 +19,5 @@ export {
   IDBWriteOptions,
   IFieldDefinition,
   ITableDefinition,
+  MySQLPlusUtils
 }
