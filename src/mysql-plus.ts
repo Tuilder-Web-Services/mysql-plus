@@ -4,7 +4,7 @@ import { dbRead, IDBReadOptions } from "./read"
 import { toSnake, toCamel, stringify } from "./utils"
 import { IKey, prepareData, SchemaSync } from "./sync"
 import { EDbOperations, ETableChangeType } from "./enums"
-import { Subject } from "rxjs"
+import { Subject, filter, map } from "rxjs"
 import { dbDeleteWhere } from "./delete"
 
 export interface IDbConnectOptions<TSessionContext> extends PoolOptions {
@@ -119,10 +119,41 @@ export class MySQLPlus<TSessionContext = any> {
     return fields
   }
 
-  public listenToDbChanges(permissions: IDbPermissions, tableName: string) {
-    // check permissions
-    // return observable
-    // this.eventStream.pipe(e => e.database)
+  public onChanges(permissions: IDbPermissions, tableName: string) {
+    return this.eventStream.pipe(
+
+      // Filter events based on permissions and the table name
+      filter(e => {
+        tableName = toSnake(tableName)
+
+        // Return false if the table doesn't match
+        if (e.database !== this.databaseName || tableName !== toSnake(e.table)) return false
+
+        // Return false if read permissions are not present
+        if (!permissions.tables?.[tableName].operations?.has(EDbOperations.Read)) return false
+
+        // Ensure qualifiers are satisfied
+        if (permissions.qualifiers && e.type !== ETableChangeType.Deleted) {
+          for (const [key, value] of Object.entries(permissions.qualifiers)) {
+            if (e.data[key] !== value) return false
+          }
+        }
+
+        // All checks have passed, allow this event to pass through
+        return true
+      }),
+
+      // Remove protected fields from the data
+      map(e => {
+        let { type, data, table } = e
+        table = toSnake(table)
+        if (permissions.tables?.[table]?.protectedFields) {
+          for (const protectedField of permissions.tables?.[table]?.protectedFields ?? []) {
+            if (data[protectedField] !== undefined) delete data[protectedField]
+          }
+        }
+        return { type, data }
+      }))
   }
 
   public async getEntityDefinition(entity: string) {
