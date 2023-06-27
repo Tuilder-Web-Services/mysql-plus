@@ -46,9 +46,9 @@ db.eventStream.subscribe(e => {
   // await db.write(permissions, 'FooPerson', { id: 'abassdfbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
 
   // Read some data
-  const person = await db.read(permissions, 'FooPerson', { id: 'abffsbkj' })
+  const people = await db.read(permissions, 'FooPerson', { where: { name: ['A', 'B'] } })
 
-  console.log(person);  
+  console.log(people);  
 
   // Delete some data
   // await db.delete(permissions, 'FooPerson', 'abfui1y2fsbkj')

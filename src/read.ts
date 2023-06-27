@@ -24,9 +24,10 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
       if (Array.isArray(value)) {
         whereValues.push(...value)
         whereColumns.push(`\`${toSnake(key)}\` in (${value.map(v => `?`).join(', ')})`)
+      } else {
+        whereValues.push(value)
+        whereColumns.push(`\`${toSnake(key)}\`=?`)
       }
-      whereColumns.push(`\`${toSnake(key)}\`=?`)
-      whereValues.push(value)
     }
   }
 
