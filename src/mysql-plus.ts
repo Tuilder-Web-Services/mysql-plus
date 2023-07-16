@@ -130,7 +130,10 @@ export class MySQLPlus<TSessionContext = any> {
         if (e.database !== this.databaseName || tableName !== toSnake(e.table)) return false
 
         // Return false if read permissions are not present
-        if (!permissions.tables?.[tableName].operations?.has(EDbOperations.Read)) return false
+        if (
+          !permissions.tables?.[tableName]?.operations?.has(EDbOperations.Read) &&
+          !permissions.default?.has(EDbOperations.Read)
+        ) return false
 
         // Ensure qualifiers are satisfied
         if (permissions.qualifiers && e.type !== ETableChangeType.Deleted) {
