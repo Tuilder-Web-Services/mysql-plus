@@ -92,7 +92,7 @@ export class MySQLPlus<TSessionContext = any> {
     table: string,
     fields?: string[],
     removeProtectedFields = false
-  ) {
+  ): string[] {
     table = toSnake(table)
     fields = fields?.map(f => toSnake(f)) ?? []
     const operationName = EDbOperations[operation]
@@ -104,13 +104,7 @@ export class MySQLPlus<TSessionContext = any> {
       hasProtectedField = false
     }
 
-    let allowed = false
-
-    if (permissions.tables?.[table]) {
-      allowed = (permissions.tables?.[table]?.operations?.has(operation) && !hasProtectedField) === true
-    } else {
-      allowed = (permissions.default?.has(operation) && !hasProtectedField) === true
-    }
+    const allowed = ((permissions.default?.has(operation) || permissions.tables?.[table]?.operations?.has(operation)) && !hasProtectedField) === true
 
     if (!allowed) {
       throw new Error(`Permission denied: ${operationName} on ${table}`)
