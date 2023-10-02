@@ -46,7 +46,8 @@ db.eventStream.subscribe(e => {
   // await db.write(permissions, 'FooPerson', { id: 'abassdfbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
 
   // Read some data
-  const people = await db.read(permissions, 'FooPerson', { where: { name: ['A', 'B'] } })
+  
+  const people = await db.query('select * from `test-db`.`FoozPerson`')
 
   console.log(people);  
 

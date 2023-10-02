@@ -3,7 +3,7 @@ import { stringify, toCamel, toSnake } from './utils'
 
 export class SchemaSync {
 
-  private tableDefinitions = new Map<string, ITableDefinition>()
+  public tableDefinitions = new Map<string, ITableDefinition>()
 
   constructor(private db: Pool, private dbName: string, private schemaKeys?: Record<string, IKey[]>) { }
 
@@ -35,6 +35,9 @@ export class SchemaSync {
   public async getTableDefinition(name: string): Promise<ITableDefinition | null> {
     try {
       let tableDef = this.tableDefinitions.get(name)
+      if (!tableDef && !await this.tableExists(name)) {
+        return null;
+      }
       if (!tableDef) {
         const [rows] = await this.db.query(`show create table \`${this.dbName}\`.\`${name}\``) as any[]
         const txt = (rows[0]['Create Table'] as string)

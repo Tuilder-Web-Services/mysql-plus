@@ -172,8 +172,16 @@ export class MySQLPlus<TSessionContext = any> {
   }
 
   public async read<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
+    
     const tableName = toSnake(table)
     const tableDef = await this.sync.getTableDefinition(tableName)
+    if (!tableDef) {
+      if (params?.firstOnly || params?.id) {
+        return null
+      } else {
+        return [] as T
+      }
+    }
     const columns: string[] =
       (params?.select ? (typeof params.select === 'string' ? [params.select] : [...params.select] ?? []).map(c => toSnake(c))
         : tableDef?.fields.filter(f => f.dataType !== 'KEY' && !new Set(['PRIMARY', 'KEY', 'CONSTRAINT']).has(f.field)).map(f => f.field) ?? [])
@@ -182,7 +190,15 @@ export class MySQLPlus<TSessionContext = any> {
       params.where = Object.assign((params.where ?? {}), permissions.qualifiers)
     }
     params.select = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
-    return await dbRead<T>(this.pool, this.databaseName, table, params, this.sync)
+    try {
+      return await dbRead<T>(this.pool, this.databaseName, table, params, this.sync)
+    } catch(e: any) {
+      if (params?.firstOnly || params?.id) {
+        return null
+      } else {
+        return [] as T
+      }
+    }
   }
 
   public async readFirst<T>(permissions: IDbPermissions, table: string, params?: IDBReadOptions): Promise<T | null> {
@@ -213,8 +229,13 @@ export class MySQLPlus<TSessionContext = any> {
   }
 
   public async query<T = any>(query: string, params?: any[]): Promise<T[]> {
-    const [rows] = await this.pool.query(query, params) as any[]
-    return rows
+    try {
+      const [rows] = await this.pool.query(query, params) as any[]
+      return rows
+    } catch (e: any) {
+      console.log(`MysqlPlus.query(${e.sql}) - ${e.code}`)
+      return []
+    }
   }
 
   public async write<T = any>(permissions: IDbPermissions, tableName: string, data: any, options: IDBWriteOptions<TSessionContext> = {}) {
