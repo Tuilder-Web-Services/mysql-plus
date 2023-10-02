@@ -191,7 +191,11 @@ export class MySQLPlus<TSessionContext = any> {
     }
     params.select = this.checkPermissions(permissions, EDbOperations.Read, table, columns, true)
     try {
-      return await dbRead<T>(this.pool, this.databaseName, table, params, this.sync)
+      const result = await dbRead<T>(this.pool, this.databaseName, table, params, this.sync)
+      if (result === null && !params?.firstOnly) {
+        return [] as T
+      }
+      return result
     } catch(e: any) {
       if (params?.firstOnly || params?.id) {
         return null

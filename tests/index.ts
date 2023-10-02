@@ -40,14 +40,15 @@ db.eventStream.subscribe(e => {
   }
 
   // Write some data
-  // await db.write(permissions, 'FooPerson', { id: 'abfui1y2fsbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
+  await db.write(permissions, 'FoozPerson', { id: 'abfui1y2fsbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
   // await db.write(permissions, 'FooPerson', { id: 'abffsbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
   // await db.write(permissions, 'FooPerson', { id: 'abffasdsbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
   // await db.write(permissions, 'FooPerson', { id: 'abassdfbkj', name: 'Emmanuel Clive Higgins', age: 206487, isActive: true, favColor: 'red, yellow and black maybe' })
 
   // Read some data
   
-  const people = await db.query('select * from `test-db`.`FoozPerson`')
+  const people = await db.read(permissions, 'FoozPerson', { where: { name: [] } })
+  // const myEvents = await this.db.read(permissions, "event", { where: { id: myEventMemberships.map(e => e.eventId) }})
 
   console.log(people);  
 

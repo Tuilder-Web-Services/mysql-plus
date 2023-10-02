@@ -22,8 +22,12 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
   if (options.where && Object.keys(options.where).length > 0) {
     for (const [key, value] of Object.entries(options.where)) {
       if (Array.isArray(value)) {
-        whereValues.push(...value)
-        whereColumns.push(`\`${toSnake(key)}\` in (${value.map(v => `?`).join(', ')})`)
+        if (value.length > 0) {
+          whereValues.push(...value)
+          whereColumns.push(`\`${toSnake(key)}\` in (${value.map(v => `?`).join(', ')})`)
+        } else {
+          whereColumns.push(`1=0`)
+        }
       } else {
         whereValues.push(value)
         whereColumns.push(`\`${toSnake(key)}\`=?`)
@@ -51,7 +55,7 @@ export async function dbRead<T>(db: Pool, database: string, tableName: string, o
     // select * from table where field=?
     // select * from table where field in (?, ?, ?, ?, ?, ?)
 
-    const query = `select ${selectCols} from \`${database}\`.\`${tableName}\` ${whereCols}`    
+    const query = `select ${selectCols} from \`${database}\`.\`${tableName}\` ${whereCols}`
 
     const [rows] = await db.query(query, whereValues) as any[]
 
