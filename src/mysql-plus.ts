@@ -132,7 +132,7 @@ export class MySQLPlus<TSessionContext = any> {
         // Ensure qualifiers are satisfied
         if (permissions.qualifiers && e.type !== ETableChangeType.Deleted) {
           for (const [key, value] of Object.entries(permissions.qualifiers)) {
-            if (e.data[key] !== value) return false
+            if (e.data[toCamel(key)] !== value) return false
           }
         }
 
